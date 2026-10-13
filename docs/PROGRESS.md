@@ -2510,6 +2510,154 @@ lista de pendências.
     pedido do usuário, commits, releases e PRs não levam link de sessão nem rodapé do Claude; as mensagens dos
     primeiros commits foram reescritas sem essas linhas (mesmos arquivos) e reenviadas.
 
+106. **Pnach completo e recarregado com o jogo rodando (2026-10-12).** Primeiro passo dos mods do usuário (o Coop
+    Tool dele gera pnachs de times, IA, P5-P8, personagens e atributos).
+    - **Tipos de código** (`ps2_pnach.cpp`, a lógica do `handle_extended_t` do PCSX2): além das escritas 0/1/2,
+      incremento/decremento (3), escrita em série (4), cópia (5), ponteiro (6), OR/AND/XOR (7) e as condicionais `D`
+      (próxima linha) e `E` (próximas n linhas), em ordem, com o estado de linha do PCSX2. O pnach principal do usuário
+      tinha 6 linhas `E` que eram puladas; agora carrega inteiro (114 linhas, 0 puladas).
+    - **Recarregar ao vivo:** uma thread confere a lista e as datas dos arquivos a cada segundo; quando muda, monta a
+      lista nova e troca de uma vez (a thread do EE lê a lista a cada vblank), e as linhas `patch=0`/`2` rodam no
+      vblank seguinte. A lista vem do `config.ini [Mods] Enabled` relido do disco (ou fica fixa se `PS2X_PNACH` foi
+      definido à mão; aí só as datas dos arquivos são vigiadas). F4 recarrega na mão. Mensagem na tela
+      "Patches reloaded" por 3 s. `PS2X_PNACH_RELOAD=0` desliga.
+    - **Testado** numa cópia da pasta do jogo: ligar o pnach no `config.ini` com o jogo aberto recarregou (114
+      linhas, aplicadas a cada vblank), editar o arquivo recarregou, desligar voltou a 0.
+    - Desligar um pnach não desfaz o que ele já escreveu (como no PCSX2): vale até o jogo regravar o valor.
+
+107. **Menu dentro do jogo (F2) com a aba Mods (2026-10-12).** Base para os mods do usuário (o Coop Tool vem depois,
+    refeito do zero com ele). O jogo continua rodando com o menu aberto.
+    - **Desenho:** pelo ImGui de dentro do `pcsx2gs.dll` (o mesmo do texto do F3), em `ImGuiManager::RenderOSD`, por
+      cima da imagem. API do GS na versão 4: `set_menu(draw, user)` e `menu_input(...)`, e uma tabela C de interface
+      (`Pcsx2GsUi`: janela, abas, textos, título, checkbox, botão, área com rolagem...) que o desenho usa sem depender
+      da versão do ImGui; os mods em DLL vão usar a mesma tabela. Estilo escuro com o vermelho do jogo; a letra e a
+      janela escalam com a altura da tela e nunca passam do tamanho dela.
+    - **Runtime** (`ps2_game_menu.cpp`, `ps2x::menu`): F2 abre/fecha (e o X da janela), os painéis registrados viram
+      abas; com o menu aberto o mouse, o teclado (setas, Enter, Espaço, Esc, Tab) e qualquer controle (direcional ou
+      analógico, ✕/A confirma, ○/B volta, L1/R1) vão para o menu, e os controles do jogo ficam parados
+      (`ps2_host_input::setBlocked`).
+    - **Aba Mods** (`src/urban/mods.cpp`): os `.pnach` da pasta `mods` com nome (grupo `[...]` ou nome do arquivo),
+      descrição (`comment=`) e número de linhas (lido de novo só quando o arquivo muda), checkbox que grava o
+      `config.ini [Mods] Enabled` e recarrega na hora, "Recarregar (F4)" e "Abrir pasta de mods". Idioma pelo
+      `[Launcher] Language` (`URBAN_LANGUAGE`). As funções do `[Mods]` saíram do `main.cpp` para esse módulo.
+    - **Testado** numa cópia da pasta do jogo: F2 abre por cima da abertura; clicar no 4x4 gravou
+      `Enabled=4x4.pnach`, recarregou (74 linhas, aplicadas a cada vblank) e mostrou "On: 4x4.pnach"; o jogo seguiu
+      rodando. A navegação por controle não foi testada aqui (sem controle conectado no teste).
+    - `PS2X_GAME_MENU=0` desliga.
+
+108. **OBS: captura de janela preta (2026-10-12).** O usuário: o OBS só grava o jogo capturando o monitor; pela
+    janela fica preto. Reproduzido com os dois métodos da captura de janela do OBS: BitBlt (o que o "Automático" usa
+    nessa janela) sai vazio, porque a imagem é um swap chain DX11 em modo flip (como em muitos jogos atuais), que o
+    GDI não enxerga; o Windows Graphics Capture ("Windows 10 (1903 e posterior)") sai com a imagem certa. Fazer o
+    BitBlt funcionar exigiria copiar cada quadro para o GDI (custo por quadro): fica a orientação nos READMEs.
+
+109. **Mods em DLL e o menu "MODS / PATCHES" (2026-10-12).** Pedido do usuário: a janela do F2 se chama
+    "MODS / PATCHES" e tem uma aba por mod em DLL ligado; cada mod é uma DLL pronta, com os patches embutidos, ligada no
+    launcher. Os `.pnach` soltos continuam (`config.ini`, F4), mas saíram do menu.
+    - **Kit** (`modsdk/`): `include/urban_mod_api.h` (C, versão 1) e `example/` (ExampleMod: dois grupos de patches,
+      aba própria com a vida ao vivo e um botão, código por quadro). O exemplo compila junto com o jogo
+      (`URBAN_BUILD_MOD_EXAMPLE`) para `bin/mods/ExampleMod`.
+    - **API:** `add_patches` (texto pnach embutido; com `show` vira checkbox salvo no `settings.ini` do mod, por
+      posição, não pelo nome traduzido), `set_patches_enabled`, `read`/`write` na RAM do EE, `set_tab` (desenha com
+      `UrbanModUi`, a mesma tabela `Pcsx2GsUi` da DLL do GS), `on_frame` (thread do EE, depois dos patches),
+      `get_setting`/`set_setting`, `log`, `language`.
+    - **Motor de patches:** além dos arquivos, grupos vindos dos mods (`ps2x::pnach::addGroup`), aplicados enquanto
+      ligados (a lista em uso junta arquivos e grupos); `addFrameHook` para o código por quadro.
+    - **Carregador** (`src/urban/mod_loader.cpp`): `config.ini [Mods] Dlls` (`URBAN_MOD_DLLS`), `LoadLibrary` de
+      `mods\<Nome>\<Nome>.dll`, `urban_mod_init`; descrição do `mod.json` (`description`/`description_pt`); um
+      travamento dentro do mod (SEH) para só o mod e a aba avisa. Sem mod ligado o menu diz como ligar.
+    - **Testado** na cópia da pasta do jogo: o ExampleMod carregou ("2 patch options, own tab, frame code"); F2 mostrou
+      a aba com a descrição, os checkboxes, a vida ao vivo e o contador de quadros; marcar "Infinite health (P1)"
+      ligou o grupo, a vida do P1 foi para 1500 na leitura e a escolha ficou no `settings.ini`.
+
+110. **Release com os mods (2026-10-13).** O release agora leva os mods compilados com o jogo (`game\mods\<Nome>`, dll
+    + `mod.json`, desligados) e a nota da pasta `mods` fala só de mods em DLL; os `.pnach` soltos continuam
+    funcionando pelo `config.ini` (`[Mods] Enabled`) e pelo F4.
+
+111. **CoopTool como mod em DLL (`mods/CoopTool`, 2026-10-13).** Multiplayer com até 8 lutadores, refeito do zero a
+    partir do mapa de memória do Coop Tool do usuário (`pnach_gen.py`): 1–4 humanos, "cada um por si" ou times
+    personalizados, os bots (P2–P4 são CPUs da seleção; P5–P8 bots extras com lutador, time, força e vida), opções
+    globais "Forçar P4 como Brad" e "Permitir lutador repetido", e uma aba "Como usar" com as limitações. Escreve a cada
+    quadro (`on_frame`); KO regional e KO por ataque do time ficam desligados enquanto ele está ligado.
+    - **Câmera voando / cena preta:** ligar o mod com uma luta já rodando (teste com `fight1v1.state`) ligava P5–P8 no
+      meio da luta; o jogo só monta os lutadores quando a luta carrega, e a câmera tentava enquadrar lutadores sem
+      lugar na cena. O trace (`COOPTOOL_TRACE=1`) mostrou a ordem: na carga o jogo zera o `on` e a IA (`-0xB0`) do
+      P5–P8 e lê o `on` logo depois (um extra que estava ligado é regravado nesse quadro e entra).
+    - **Só pegava na primeira luta:** a 1ª versão usava a missão `0x94D16C = 0xFFFF` como "luta rodando", mas ela
+      continua `0xFFFF` na seleção e no setup depois da primeira luta. Comparando a RAM de 3 estados de menu e 4 de luta
+      (e um trace ao vivo de boot → seleção → luta → pausa → restart → seleção → setup) o sinal certo é a **cena em
+      `0x9449F8`** (32 bits): 0–3 boot/título/menus, 4 seleção/setup/config do multiplayer, 5 luta (também pausada e no
+      restart). Regra: fora da luta os extras são ligados à vontade; na luta só os que já estavam ligados antes dela (ou
+      que o jogo já montou). Um extra ligado no meio da luta entra na próxima, e o **restart** não conta: ele mantém os
+      modelos carregados, e ligar um extra nele também deixava a cena preta.
+    - **Save state:** carregar um estado (F9) trocava o momento do jogo e o mod achava que o extra já estava ligado
+      antes. A API dos mods foi para a **versão 2** com `state_loads()` (contador de loads,
+      `ps2x::savestate::loadCount()`); o CoopTool recomeça o acompanhamento dos extras quando ele muda.
+    - **Opções novas (pedido do usuário):** IA de cada bot (Padrão, níveis 1–6 e os perfis da história do Coop Tool),
+      força e vida também dos humanos, e por lutador "SPA infinito" (SPA = 1000 a cada quadro) e "Membros não quebram"
+      (cabeça/tronco/pernas em `+0x04/+0x06/+0x08` = a resistência HDE/UBE/LBE; o `0xFF` fixo do pnach deixava pela
+      metade quem tem resistência 500). Settings: `humanN`/`botN = lutador,time,força,vida,ia,spa,membros`.
+    - `COOPTOOL_LIVE=1` liga os extras a qualquer momento (jeito antigo).
+    - **Testado** (cópia isolada, settings com 1 humano + 5 bots): `select4` → luta com os extras; pausa → setup →
+      seleção → 2ª luta com os extras; restart com os extras; `fight1v1` (luta rodando) → cena normal, restart normal e
+      sem extras, seleção → luta com os extras; `fight8_heli` mantém os 8. Na RAM: P1 vida 2250/2250 (x1.5), SPA 1000,
+      membros 500 (= resistência), atributos 1000 (Forte); bot P2 com IA `0x0004001B` (nível 5).
+    - Depois, a pedido: "SPA infinito" só para os humanos (CPUs e bots sem a opção).
+
+112. **CoopTool: fases do Free Mode no Multiplayer (experimental, 2026-10-13).** O usuário queria lutar no Multiplayer
+    nas fases do Free Mode (o menu só tem 7).
+    - **Como o jogo escolhe a fase:** o Multiplayer Config guarda o índice do menu em `0x943D98` (0–5, 7 = Random) e o
+      ID da fase em `0x94A671` (byte; `0xFF` = sortear). Na carga da luta, `0x2407C0` copia esse byte para o ID da luta
+      `0x5E8C88` (via `0x238BB0`; achado com `URBAN_HW_WATCH`). Os IDs são os mesmos do Free Mode (saves do usuário:
+      Back Alley 10, Chinatown 0, Abandoned Theater 24; luz `bgNN.lit`, NN = ID + 1). Nomes em ordem na lista
+      `$P1...` em `0x4543xx`: 0 Chinatown ... 19 Bordin Bldg. Rooftop ... 30 Chinese Market, 31 Scrapyard. Fases do
+      menu: 19, 3, 27, 28, 29, 30.
+    - **Por que as do Free Mode travavam no "Now Loading":** com o watchpoint de leitura novo (`URBAN_HW_WATCH_RW=1`)
+      a carga forçada parava logo depois de `0x22C0C0`: o Multiplayer pede `afs/safe/ppk/stage%03d.ppk` (ID + 1, string
+      em `0x6B9D78`), que só existe para as fases dele; o Free Mode pede `mission%03d.ppk` (`0x6B9D58`). Nenhuma leitura
+      de disco acontecia: a busca do arquivo falhava e a carga esperava para sempre.
+    - **Solução:** com uma fase escolhida no mod, ele grava o ID em `0x94A671` e troca o nome em `0x6B9D78` pelo pacote
+      de uma missão daquela fase (`mission012.ppk` etc.; tabela missão → fase de 100 entradas em `0x60C228`, 16 bits).
+      Ao desligar, volta o nome original e o byte da fase do menu.
+    - **Todos nasciam no mesmo ponto** (o pacote da missão não tem os pontos do versus). A posição do lutador é
+      `obj+0x10` (x, y, z float, metros; `obj` = vida − `0x8E28`, ponteiros em `0x59D168`), direção em `obj+0x20`
+      (voltas; 0.25 = olhando +x). Os outros vetores (`-0x518`, `0x2A8`...) são ossos recalculados a cada quadro.
+      Quando P1–P4 estão exatamente no mesmo ponto numa luta na fase escolhida (início de round), o mod espalha todos
+      pelos pontos da missão (parceiro + inimigos, mm, do `missions_original.json` do Coop Tool), só os até 6 m do
+      ponto do meio, completando com pontos nas linhas entre eles, virados para o centro.
+    - **Testado:** Back Alley (missão 12) com 6 lutadores espalhados e câmera normal; Bordin Bldg. Top Floor (100);
+      Chinatown: a missão 25 trava na carga, a 2 funciona. Abandoned Theater com a missão 75 carrega e fecha o jogo
+      segundos depois (chamada virtual por um objeto inválido em `0x1E0D7C`, objeto de missão que o Multiplayer não
+      inicializa); trocado para a 87, sem teste. Por pedido do usuário as outras fases não foram testadas uma a uma: a
+      opção fica marcada como experimental, com aviso na aba. `COOPTOOL_MISSION=<n>` testa outro pacote.
+    - **Fase e opções globais independentes** (pedido do usuário): o "Ligado" virou "Jogadores e bots ligados" e só
+      vale para as seções 1–4 (e o KO regional desligado). Fase, "Forçar P4 como Brad" e "Lutador repetido" funcionam
+      sozinhos, mas só no Multiplayer: o modo fica em `0x59D0C0` (1 = história/Free Mode, 2–4 = Multiplayer, os modos
+      que carregam `stage%03d.ppk`); fora dele a fase e o nome do pacote voltam ao original e o P4 não é tocado (lá ele
+      é inimigo). "Lutador repetido" agora vem desligado por padrão. Testado: jogadores/bots desligados + Back Alley →
+      luta só com os 4 da seleção, espalhados.
+    - **Bug do agarrão** (relatado pelo usuário): num agarrão o jogo cola os dois lutadores no mesmo ponto, e a regra
+      "P1–P4 no mesmo ponto = início de round" espalhava no meio do golpe (o agarrado ficava voando). Agora só há uma
+      janela de 5 s, aberta quando a luta carrega e quando a vida de todos volta ao máximo depois de alguém apanhar
+      (próximo round, restart; vida comparada com sinal, nocaute fica abaixo de 0), e ela fecha depois de espalhar.
+      Testado: Back Alley, 30 s de luta com os CPUs, espalhou uma vez só.
+
+113. **Ícone do `urban.exe` (2026-10-13).** O mesmo do launcher: `src/res/urban.ico` + `src/res/urban.rc` (recurso
+    `GLFW_ICON`, que o GLFW do raylib usa na janela e na barra de tarefas; o Explorer mostra o mesmo). Conferido no
+    Explorer e na barra de título.
+    - **Paredes transparentes perto da câmera (só olhado por cima):** o executável tem os menus de depuração dos
+      desenvolvedores em `0x6AFD00`–`0x6B0900` (montados em `0x1BDE40` com `func_1B6988`/`func_1B6F90`): "COLLI MENU"
+      com WALL DISP, **CAMWALL DISP**, FLOOR DISP; "OBJ MENU" com CULLING e Z SORT; RT/AO/CH MENU com CAMERA,
+      THROW CAM, CAMERA SPRING, WALL. A grade de colisão (`kg_colligrid.cpp`) tem um tipo "camwall" separado das
+      paredes; o esconder/apagar parede deve vir de dados por fase (por isso só funciona em algumas).
+    - **Ligar o menu de depuração (investigado, não feito):** ele é uma tarefa C++ com vtable em `0x6A8018` (init
+      `0x1B7828`, update+desenho `0x1B7898`, draw vazio `0x1B7A18`) que nenhum código do jogo final cria. Daria para
+      rodá-la pelo callback opcional das tarefas (o método base `0x123678` chama `[obj+0x1C]`; `0x1236A0` → `+0x18`,
+      `0x123628` → `+0x10`; objetos vivos o tempo todo com esses campos zerados, ex. `0xADE400`, vtable `0x6A7FB8`).
+      Mas o init carrega a fonte do menu do PC dos desenvolvedores, `HST:/team/f090/data/rt/font.p2t` (`func_145A50`,
+      handle em `0x451640`), que não existe no disco (o único "font.p2t" da ISO é o texto no executável): sem ela o
+      update não desenha nada. Precisaria criar uma fonte nesse formato ou trocar o desenho pela fonte do jogo.
+
 ## Ferramentas
 
 Ver a tabela de variáveis de ambiente no README. As mais úteis até agora:

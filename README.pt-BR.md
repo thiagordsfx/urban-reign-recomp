@@ -52,7 +52,8 @@ ver os detalhes.
 [Urban Reign Enhanced HD Textures Pack](https://gbatemp.net/threads/urban-reign-enhanced-hd-textures-pack-updated.665094/)
 e extraia na pasta `game\textures` (tem que ficar `game\textures\SLUS-21209\replacements`).
 
-**Mods:** coloque patches `.pnach` do PCSX2 em `game\mods` e ligue na aba **Mods**.
+**Mods:** coloque mods (uma pasta com a `.dll`) ou patches `.pnach` do PCSX2 em `game\mods` e ligue na aba
+**Mods**; as opções ficam no menu do jogo (**F2**). Para criar o seu: o [kit de mods](modsdk/README.md#português).
 
 ### Requisitos
 
@@ -77,6 +78,11 @@ Controles funcionam direto. Botões, qual controle é de cada jogador e o multit
 | F11 | Tela cheia |
 | F3 | Contador de FPS |
 | F5 / F9 | Salvar / carregar estado rápido |
+| F2 | Menu do jogo: MODS / PATCHES |
+| F4 | Recarregar os mods (.pnach) |
+
+**Gravar com o OBS:** use *Captura de janela* com **Método de captura: Windows 10 (1903 e posterior)** (o padrão
+"Automático"/BitBlt mostra a janela vazia), ou *Captura de tela*.
 
 ## Compilar do zero
 

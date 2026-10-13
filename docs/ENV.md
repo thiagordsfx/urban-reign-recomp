@@ -4,6 +4,10 @@
 | Variável | Uso |
 |---|---|
 | `URBAN_ISO` | caminho da ISO |
+| `COOPTOOL_TRACE=1` | (mod CoopTool) loga as mudanças da cena (`0x9449F8`), missão, `on`/IA do P5 e da fase (`0x5E8C88`, `0x943D98`, `0x4453E4`, `0x652974`) |
+| `COOPTOOL_MISSION=<n>` | (mod CoopTool) com uma fase do Free Mode escolhida, carrega o pacote `mission<n>.ppk` em vez do da tabela (para testar outras missões da mesma fase) |
+| `URBAN_HW_WATCH_RW=1` | junto de `URBAN_HW_WATCH`, o watchpoint pega leituras também (loga "access", sem o valor) |
+| `COOPTOOL_LIVE=1` | (mod CoopTool) liga os bots extras mesmo com a luta rodando (jeito antigo; cena preta / câmera voando) |
 | (tecla F8) | grava `ram_<tick>.bin` e um trace do VU1 de 2 fields (`vu1trace_<tick>.bin`) na pasta do executável |
 | `URBAN_DEBUG_UI=1` | abre o Runtime Debugger (ImGui) no início; F1 abre/fecha a qualquer momento |
 | `PS2X_IOP_HLE_MCSERV=0` | (runtime) usa o MCSERV/MCMAN originais do jogo no IOP emulado em vez do HLE |
@@ -69,6 +73,9 @@
 | `PS2X_VSYNC_PHASE_MS=<ms>` | (runtime) onde o vblank emulado (e o present) cai na atualização do monitor, em ms depois do vblank dele; padrão 7 (antes 1: metade das imagens disputava a coleta do compositor, §96). Só vale com o lock ativo (`PS2X_VSYNC_LOCK`, monitor de ~60 Hz ou múltiplo: 120/180/240 Hz, onde vale a mesma fração da atualização mais curta, §97) |
 | `PS2X_VSYNC_TEST_MULTIPLY=<n>` | (testes) finge um monitor n vezes mais rápido (vblanks intercalados) para exercitar o lock de 120/240 Hz num monitor de 60 Hz; a lisura medida nesse modo não vale nada |
 | `PS2X_HOST_PRESENT=1` | (runtime) a janela do raylib apresenta quadros mesmo com o GS do PCSX2 (antes do §98: deixava a tela cheia preta) |
+| `PS2X_PNACH_RELOAD=0` | (runtime) não recarrega os `.pnach` com o jogo rodando (padrão: recarrega quando `config.ini [Mods] Enabled` ou um arquivo ligado muda, e no F4; §106) |
+| `PS2X_GAME_MENU=0` | (runtime) desliga o menu do F2 (§107) |
+| `URBAN_MOD_DLLS=<A;B>` | (`config.ini [Mods] Dlls`) mods em DLL ligados: `mods\<Nome>\<Nome>.dll` (§109; kit em `modsdk/`) |
 | `URBAN_START_FULLSCREEN=1` | (`config.ini` `[Video] StartFullscreen`) abre em tela cheia sem borda, como o F11 |
 | `URBAN_MODS=<a.pnach;b.pnach>` | (`config.ini` `[Mods] Enabled`) os patches da pasta `mods` ligados; viram `PS2X_PNACH` se ele não estiver definido |
 | `urban.exe --write-settings` | escreve/completa/converte `config.ini` e `controls.ini` com os comentários e os padrões, e sai |

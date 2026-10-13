@@ -42,7 +42,8 @@ EN
 - Open "Urban Reign.exe". In the Game tab pick your own Urban Reign disc image (USA, SLUS-21209, .iso).
   The game is not included: you need your own copy.
 - Graphics, controllers (PCSX2 style, multitap, vibration) and mods are set in the launcher.
-- Mods: put PCSX2 .pnach files in game\\mods and turn them on in the Mods tab.
+- Mods: each mod is a folder in game\\mods (CoopTool comes with it); turn them on in the Mods tab, their options
+  are in the in-game menu (F2).
 - HD textures: put a PCSX2 texture pack in game\\textures\\SLUS-21209 (the folder with "replacements").
 - In game: F11 fullscreen, F3 FPS counter, F5/F9 quick save/load state.
 - Needs Windows 10/11 64-bit, a DirectX 11 graphics card and a CPU with SSE4.1.
@@ -51,7 +52,8 @@ PT
 - Abra o "Urban Reign.exe". Na aba Jogo escolha a sua imagem do Urban Reign (EUA, SLUS-21209, .iso).
   O jogo não vem junto: você precisa da sua própria cópia.
 - Gráficos, controles (estilo PCSX2, multitap, vibração) e mods são configurados no launcher.
-- Mods: coloque arquivos .pnach do PCSX2 em game\\mods e ligue na aba Mods.
+- Mods: cada mod é uma pasta em game\\mods (o CoopTool já vem junto); ligue na aba Mods, as opções ficam no
+  menu do jogo (F2).
 - Texturas HD: coloque um pacote do PCSX2 em game\\textures\\SLUS-21209 (a pasta com "replacements").
 - No jogo: F11 tela cheia, F3 contador de FPS, F5/F9 salvar/carregar estado rápido.
 - Precisa de Windows 10/11 64 bits, placa de vídeo DirectX 11 e processador com SSE4.1.
@@ -68,8 +70,10 @@ THIRD_PARTY = """Third-party software in this release
 - Launcher: Python (PSF license), pywebview (BSD-3-Clause), pythonnet (MIT), packaged with PyInstaller
 """
 
-MODS_NOTE = "Put PCSX2 .pnach patches here and turn them on in the launcher's Mods tab.\n" \
-            "Coloque patches .pnach do PCSX2 aqui e ligue na aba Mods do launcher.\n"
+MODS_NOTE = "Mods go here, one folder each (the mod's .dll and mod.json). Switch them on in the launcher's Mods tab;\n" \
+            "their options are in the in-game menu (F2). How to make one: modsdk/ in the source repository.\n" \
+            "Cada mod fica numa pasta aqui (a .dll e o mod.json). Ligue na aba Mods do launcher; as opções ficam no menu do\n" \
+            "jogo (F2). Como criar: modsdk/ no repositório do código.\n"
 TEXTURES_NOTE = "HD texture packs go in SLUS-21209\\ (PCSX2 format: SLUS-21209\\replacements\\...).\n" \
                 "Pacotes de texturas HD vão em SLUS-21209\\ (formato do PCSX2: SLUS-21209\\replacements\\...).\n"
 
@@ -171,6 +175,15 @@ def make_release() -> int:
         print(f"  game/{folder}/")
     (game / "mods").mkdir()
     (game / "mods" / "README.txt").write_text(MODS_NOTE, encoding="utf-8")
+    # The mods built with the game (mods/ and the mod kit's example): off until the player switches them on.
+    for folder in sorted((BIN / "mods").glob("*/")) if (BIN / "mods").is_dir() else []:
+        dll = folder / f"{folder.name}.dll"
+        if not dll.exists() or not (folder / "mod.json").exists():
+            continue
+        (game / "mods" / folder.name).mkdir()
+        for file_name in (dll.name, "mod.json"):
+            shutil.copy2(folder / file_name, game / "mods" / folder.name / file_name)
+        print(f"  game/mods/{folder.name}/")
     (game / "textures").mkdir()
     (game / "textures" / "README.txt").write_text(TEXTURES_NOTE, encoding="utf-8")
     (out / "README.txt").write_text(README, encoding="utf-8")
