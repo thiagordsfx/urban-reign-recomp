@@ -2658,6 +2658,26 @@ lista de pendências.
       handle em `0x451640`), que não existe no disco (o único "font.p2t" da ISO é o texto no executável): sem ela o
       update não desenha nada. Precisaria criar uma fonte nesse formato ou trocar o desenho pela fonte do jogo.
 
+114. **CoopTool: aba Free Mode (2026-10-13).** O "Free Mode até 4 jogadores" do Coop Tool do usuário, sem o modo ondas
+    (pedido dele): quantos jogadores (P2 = parceiro no controle 2 ou IA, P3/P4 = controles 3/4 no time do P1), missão
+    (1–100, com a fase e os inimigos), quantidade de inimigos, objetivo (original, derrotar todos, um alvo, quebrar
+    pernas/tronco/cabeça do alvo) e por lutador personagem (P3+), IA, força, vida, SPA infinito e membros.
+    - **Dados:** `mods/CoopTool/gen_missions.py` gera `freemode_missions.h` a partir do `pnach_gen.py` do Coop Tool
+      (`missions_original.json` + `freemode_missions.json`): as escritas extras do cheat de 4 jogadores e os 6 registros
+      da lista de inimigos (`0x1DA8654`, `0xAC` bytes; cópias dos inimigos espalhadas pela arena). Fase de cada missão
+      da tabela do jogo em `0x60C228`.
+    - **Por quadro**, só com o modo `0x59D0C0` = 1 e a missão `0x94D16C` = a escolhida − 1: lista e quantidade
+      (`0x1DA8528`/`0x1DA8650`), vagas sem uso (vida máx. 1500) derrubadas, `0xABFA74` (P2 no controle 2), P3/P4
+      humanos (time 0, byte `-0x46` = 0, SPA regain); quando todos os inimigos caem os P3/P4 humanos caem também (nas
+      missões de membros, 23/87 pernas e 65 tronco, o membro deles quebra). Vida multiplicada uma vez sobre a vida máx.
+      que o jogo deu (no Free Mode não é 1500). Com a aba ligada, a parte de jogadores e bots do Multiplayer fica parada
+      nesse modo.
+    - **Parceiro:** só é forçado (IA `0x390039` e o trecho `0x1DA848C`–`0x1DA8527`, com `0x1DA84A0 = 0xFFFE`) com a
+      opção marcada; desligada, ele vem como no jogo e o menu da missão pode tirar.
+    - **Enhanced camera** (a câmera alternativa do Coop Tool, `0x4616C0` = 8 / `0x4614D0` = 5): L3 no controle 1 liga,
+      R3 desliga (antes R2+L3 / R2+R3), só no Free Mode (os outros modos já têm essa câmera).
+    - Testado pelo usuário no jogo; antes, um programa com host falso (RAM de 32 MB) conferiu as escritas e a aba.
+
 ## Ferramentas
 
 Ver a tabela de variáveis de ambiente no README. As mais úteis até agora:

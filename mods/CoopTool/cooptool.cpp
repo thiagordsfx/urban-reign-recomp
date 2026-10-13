@@ -1,8 +1,10 @@
-// CoopTool: multiplayer with up to 8 fighters (up to 4 humans + bots), every one for himself or custom teams.
+// CoopTool: multiplayer with up to 8 fighters (up to 4 humans + bots), every one for himself or custom teams, and
+// Free Mode missions with up to 4 humans.
 // The memory map comes from thiagordsfx's Urban Reign Coop Tool (pnach generator): every fighter has a 0x9750-byte
 // block; the fields below are offsets from its current health (P1 at 0x5A5FC8). The settings are written at every
 // frame while the mod is switched on in its tab.
 #include "urban_mod_api.h"
+#include "freemode_missions.h"
 
 #include <algorithm>
 #include <array>
@@ -153,6 +155,46 @@ namespace
     constexpr char kStagePackage[] = "stage%03d.ppk";
     constexpr int kPosition = -0x8E18; // fighter's position (x, y, z floats, metres)
     constexpr int kFacing = -0x8E08;   // float, turns (0.25 = facing +x)
+    // The stage of each Free Mode mission (the game's table at 0x60C228, 16 bits each): kFreeStages index.
+    constexpr uint8_t kMissionStage[100] = {
+        10, 0, 5, 4, 6, 9, 0, 6, 3, 9, 5, 10, 4, 5, 8, 10, 6, 5, 0, 3, 4, 5, 10, 3, 0, 8, 4, 4, 8, 2, 15, 14, 13, 0,
+        2, 4, 11, 12, 7, 17, 7, 2, 17, 3, 7, 12, 13, 3, 15, 11, 13, 17, 5, 2, 10, 14, 15, 14, 11, 17, 11, 17, 7, 13,
+        12, 3, 10, 18, 16, 14, 1, 18, 14, 15, 24, 23, 16, 12, 24, 20, 18, 3, 16, 24, 20, 23, 24, 1, 0, 18, 18, 16,
+        25, 23, 23, 20, 22, 22, 19, 21};
+
+    // Free Mode memory (the Coop Tool's map).
+    constexpr uint32_t kPartnerByP2 = 0x00ABFA74u;     // 16 bits: 1 = the partner (P2) plays with controller 2
+    constexpr uint32_t kEnemyCount[] = {0x01DA8528u, 0x01DA8650u}; // 32 bits: records used in the list
+    constexpr uint32_t kEnemyTable = 0x01DA8654u;      // the list: 0xAC-byte records, +0x00 = character
+    constexpr uint32_t kEnemyStride = 0xACu;
+    // The partner's part of the mission (X / Z / angle at +0x08, written by the cheat with 0x1DA84A0 = 0xFFFE and
+    // 0x1DA84F4 = 0 to always have it), up to the list's count.
+    constexpr uint32_t kPartnerRecord = 0x01DA848Cu, kPartnerRecordEnd = 0x01DA8528u;
+    constexpr int kHumanFlag = -0x46;                  // 8 bits: 0 = controller, 1 = AI
+    constexpr int kSpaRegain = 0xA8;                   // 16 bits: SPA regained per hit taken
+    constexpr uint16_t kFreeEmptyHealth = 1500;        // health max of the list's unused slots
+    constexpr uint16_t kKnockedOut = 0xFFFF;
+    // The missions about breaking limbs (number - 1). The humans in P3/P4 count as enemies: there their own limb is
+    // broken (legs in 23 and 87, torso in 65) instead of knocking them out when the real enemies fall.
+    constexpr uint16_t kLimbMissions[] = {22, 46, 64, 86};
+    constexpr uint16_t kLegsMissions[] = {22, 86};
+    constexpr uint16_t kTorsoMission = 64;
+    // "Defeat everyone" (UR Pnach Editor: "All Missions Have The Same Objective = Take Everyone Down"), 8 bits each.
+    constexpr uint32_t kObjectiveAll[][2] = {{0x01DA9BE6u, 1}, {0x01DA9BE4u, 0}, {0x01DA854Cu, 1}, {0x01DA8548u, 1},
+                                            {0x01DA85FEu, 0}, {0x01DA85DCu, 0}, {0x01DA8552u, 0}, {0x01DA8554u, 0}};
+    enum Objective
+    {
+        kObjectiveOriginal,
+        kObjectiveEveryone,
+        kObjectiveTarget,
+        kObjectiveLegs,
+        kObjectiveTorso,
+        kObjectiveHead,
+        kObjectiveCount
+    };
+    // Enhanced camera (the Coop Tool's alternate camera): two bytes the game reads for the fight camera.
+    constexpr uint32_t kPad1Buttons = 0x00359852u;  // 16 bits, controller 1 (0 = pressed): L3 = 0x0002, R3 = 0x0004
+    constexpr uint32_t kCameraA = 0x004616C0u, kCameraB = 0x004614D0u; // 8 / 5 = enhanced, 0 / 6 = the game's
 
     // One fighter's options. Humans use team, strength, health and the two switches; bots also the rest.
     struct Fighter
@@ -166,6 +208,21 @@ namespace
         bool unbreakable = false;
     };
 
+    // Free Mode with up to 4 humans (the Coop Tool's "4 player Free Mode"): in Free Mode the game loads the model and
+    // the moves of every enemy of the mission's list, so the list itself is rewritten. P1 = player, P2 = partner
+    // (controller 2 or AI), P3..P8 = the list's records 1..6; P3/P4 can be humans (controllers 3/4) on P1's team.
+    struct FreeConfig
+    {
+        bool on = false;
+        int humans = 2;    // 1..4
+        int mission = 1;   // 1..100
+        int enemies = 2;   // 1..6 - the humans in P3/P4
+        int objective = 0; // kObjectives
+        int target = 3;    // the enemy of the objective (player)
+        bool forcePartner = false; // otherwise the partner comes as in the game (its menu can switch it off)
+        std::array<Fighter, 8> fighters{};
+    };
+
     struct Config
     {
         bool on = false;
@@ -176,6 +233,8 @@ namespace
         bool forceP4Brad = false;
         bool sameFighter = false;
         int stage = -1; // kFreeStages index, -1 = the one of the game's menu
+        bool camera = false; // enhanced camera (L3 on, R3 off), story / Free Mode only
+        FreeConfig free;
     };
 
     const UrbanModHost *g_host = nullptr;
@@ -252,6 +311,20 @@ namespace
         g_host->set_setting("forceP4Brad", config.forceP4Brad ? "1" : "0");
         g_host->set_setting("sameFighter", config.sameFighter ? "1" : "0");
         g_host->set_setting("stage", std::to_string(config.stage).c_str());
+        g_host->set_setting("camera", config.camera ? "1" : "0");
+        const FreeConfig &free = config.free;
+        g_host->set_setting("free.on", free.on ? "1" : "0");
+        g_host->set_setting("free.humans", std::to_string(free.humans).c_str());
+        g_host->set_setting("free.mission", std::to_string(free.mission).c_str());
+        g_host->set_setting("free.enemies", std::to_string(free.enemies).c_str());
+        g_host->set_setting("free.objective", std::to_string(free.objective).c_str());
+        g_host->set_setting("free.target", std::to_string(free.target).c_str());
+        g_host->set_setting("free.forcePartner", free.forcePartner ? "1" : "0");
+        for (int p = 1; p <= 8; ++p)
+        {
+            std::snprintf(key, sizeof(key), "free.p%d", p);
+            g_host->set_setting(key, fighterText(free.fighters[static_cast<size_t>(p - 1)]).c_str());
+        }
     }
     Config loadConfig()
     {
@@ -279,6 +352,22 @@ namespace
         config.forceP4Brad = settingInt("forceP4Brad", 0) != 0;
         config.sameFighter = settingInt("sameFighter", 0) != 0;
         config.stage = std::clamp(settingInt("stage", -1), -1, kFreeStageCount - 1);
+        config.camera = settingInt("camera", 0) != 0;
+        FreeConfig &free = config.free;
+        free.on = settingInt("free.on", 0) != 0;
+        free.humans = std::clamp(settingInt("free.humans", free.humans), 1, 4);
+        free.mission = std::clamp(settingInt("free.mission", free.mission), 1, 100);
+        free.enemies = std::clamp(settingInt("free.enemies", free.enemies), 1, 6);
+        free.objective = std::clamp(settingInt("free.objective", free.objective), 0, kObjectiveCount - 1);
+        free.target = std::clamp(settingInt("free.target", free.target), 3, 8);
+        free.forcePartner = settingInt("free.forcePartner", 0) != 0;
+        for (int p = 1; p <= 8; ++p)
+        {
+            Fighter &f = free.fighters[static_cast<size_t>(p - 1)];
+            f.character = -1; // the mission's
+            std::snprintf(key, sizeof(key), "free.p%d", p);
+            readFighter(key, f);
+        }
         return config;
     }
 
@@ -328,6 +417,16 @@ namespace
         }
     }
 
+    void applySwitches(int player, const Fighter &f, bool human)
+    {
+        if (human && f.infiniteSpa)
+            write16(field(player, kSpa), kFullSpa);
+        // A limb's health is full at its endurance (head HDE, torso UBE, legs LBE), not at a fixed 0xFF.
+        if (f.unbreakable)
+            for (size_t i = 0; i < 3; ++i)
+                write16(field(player, kLimbs[i]), read16(field(player, kEndurance[i])));
+    }
+
     void applyFighter(int player, const Fighter &f, bool human)
     {
         applyStrength(player, f.strength);
@@ -340,12 +439,7 @@ namespace
             write16(field(player, kHpMax), value);
             write16(field(player, kSpa), kFullSpa);
         }
-        if (human && f.infiniteSpa)
-            write16(field(player, kSpa), kFullSpa);
-        // A limb's health is full at its endurance (head HDE, torso UBE, legs LBE), not at a fixed 0xFF.
-        if (f.unbreakable)
-            for (size_t i = 0; i < 3; ++i)
-                write16(field(player, kLimbs[i]), read16(field(player, kEndurance[i])));
+        applySwitches(player, f, human);
     }
 
     // P5..P8 join a fight only when their "on" is set before the fight loads: the game loads the models then, and at
@@ -551,6 +645,178 @@ namespace
         g_host->log(line);
     }
 
+    // --- Free Mode ---
+    using Record = std::array<uint32_t, freemode::kRecordWords>;
+
+    // The mission's 6 records of the list: its own enemies, then copies of them spread over the arena.
+    std::array<Record, 6> missionRecords(int mission)
+    {
+        std::array<Record, 6> records{};
+        const freemode::Mission &m = freemode::kMissions[mission - 1];
+        for (int i = 0; i < m.words; ++i)
+        {
+            const freemode::Word &w = freemode::kWords[m.firstWord + i];
+            records[w.record][w.index] = w.value;
+        }
+        return records;
+    }
+
+    int freeExtraHumans(const FreeConfig &f) { return std::max(0, f.humans - 2); } // humans in P3/P4
+    int freeEnemies(const FreeConfig &f) { return std::clamp(f.enemies, 1, 6 - freeExtraHumans(f)); }
+    int freeFirstEnemy(const FreeConfig &f) { return 3 + freeExtraHumans(f); }
+    int freeLastEnemy(const FreeConfig &f) { return 2 + freeExtraHumans(f) + freeEnemies(f); }
+    int freeTarget(const FreeConfig &f) { return std::clamp(f.target, freeFirstEnemy(f), freeLastEnemy(f)); }
+    bool freeHuman(const FreeConfig &f, int player) { return player == 1 || (player == 2 && f.humans >= 2) || (player >= 3 && player < freeFirstEnemy(f)); }
+    bool knockedOut(int player) { return read16(field(player, kHp)) > 0x8000u; } // health below 0
+    void knockOut(int player) { write16(field(player, kHp), kKnockedOut); }
+
+    template <size_t N>
+    bool contains(const uint16_t (&list)[N], int value) { return std::find(list, list + N, value) != list + N; }
+
+    // In Free Mode everyone starts with their own health (P1/P2 1000, the enemies the list's plus a bonus), not 1500:
+    // a health max that is not the one set here is the game's, at the start of a fight, and it is scaled once.
+    std::array<uint16_t, 9> g_freeHealth{};
+
+    void scaleFreeHealth(int player, int health)
+    {
+        const float scale = kHealth[health];
+        const uint16_t max = read16(field(player, kHpMax));
+        uint16_t &set = g_freeHealth[static_cast<size_t>(player)];
+        if (scale == 1.0f || max == 0 || max == kFreeEmptyHealth || max == set)
+            return;
+        uint16_t value = static_cast<uint16_t>(std::min(32767.0f, std::round(max * scale)));
+        if (value == kFreeEmptyHealth)
+            ++value;
+        write16(field(player, kHp), value);
+        write16(field(player, kHpMax), value);
+        write16(field(player, kSpa), kFullSpa);
+        set = value;
+    }
+
+    // Everything only while the chosen mission is the one selected in the game (story / Free Mode): the list is read
+    // when the mission loads, the rest at every frame.
+    void applyFree(const FreeConfig &f)
+    {
+        const int mission = read16(kMission); // mission - 1
+        if (read32(kGameMode) != 1u || mission != f.mission - 1)
+            return;
+        const int extra = freeExtraHumans(f), entries = extra + freeEnemies(f);
+        const int first = freeFirstEnemy(f), last = freeLastEnemy(f);
+
+        // The list and the 4-player cheat's other writes. The partner's (its AI and its record in the mission:
+        // spawn point and the fields that make it always come) only when it is forced: otherwise it comes as in the
+        // game, whose menu can leave it out.
+        const freemode::Mission &m = freemode::kMissions[f.mission - 1];
+        for (int i = 0; i < m.writes; ++i)
+        {
+            const freemode::Write &w = freemode::kWrites[m.firstWrite + i];
+            const bool partner = w.address == field(2, kAiProfile) || (w.address >= kPartnerRecord && w.address < kPartnerRecordEnd);
+            if (!partner || f.forcePartner)
+                write32(w.address, w.value);
+        }
+        std::array<Record, 6> records = missionRecords(f.mission);
+        for (int i = 0; i < entries; ++i)
+        {
+            const int character = f.fighters[static_cast<size_t>(2 + i)].character;
+            if (character >= 0)
+                records[static_cast<size_t>(i)][0] = static_cast<uint32_t>(character);
+            g_host->write(kEnemyTable + static_cast<uint32_t>(i) * kEnemyStride, records[static_cast<size_t>(i)].data(), sizeof(Record));
+        }
+        for (uint32_t address : kEnemyCount)
+            write32(address, static_cast<uint32_t>(entries));
+        // The list's unused slots keep 1500: knocked out, or the mission would never end.
+        for (int p = 3 + entries; p <= 8; ++p)
+            if (read16(field(p, kHpMax)) == kFreeEmptyHealth)
+                knockOut(p);
+
+        write16(kPartnerByP2, f.humans >= 2 ? 1 : 0);
+        for (int p = 3; p < first; ++p)
+        {
+            write16(field(p, kTeam), 0);
+            write8(field(p, kHumanFlag), 0);
+            write16(field(p, kSpaRegain), 0x0A);
+        }
+        if (extra)
+        {
+            // The humans in P3/P4 came from the list, so the mission counts them as enemies: when the real enemies
+            // fall they are knocked out too; in the limb missions their own limb is broken instead.
+            if (!contains(kLimbMissions, mission))
+            {
+                bool allDown = true;
+                for (int p = first; p <= 8; ++p)
+                    allDown = allDown && knockedOut(p);
+                if (allDown)
+                    for (int p = 3; p < first; ++p)
+                        knockOut(p);
+            }
+            for (int p = 3; p < first; ++p)
+            {
+                if (contains(kLegsMissions, mission))
+                    write16(field(p, kLimbs[2]), kKnockedOut);
+                if (mission == kTorsoMission)
+                    write16(field(p, kLimbs[1]), kKnockedOut);
+            }
+        }
+
+        // Objective: the custom ones start from "defeat everyone".
+        if (f.objective != kObjectiveOriginal)
+            for (const auto &w : kObjectiveAll)
+                write8(w[0], static_cast<uint8_t>(w[1]));
+        const int target = freeTarget(f);
+        if (f.objective == kObjectiveTarget)
+        {
+            if (knockedOut(target))
+                for (int p = first; p <= last; ++p)
+                    if (p != target)
+                        knockOut(p);
+        }
+        else if (f.objective >= kObjectiveLegs)
+        {
+            // The target cannot fall while the limb is whole; once it breaks every enemy falls.
+            const int limb = kLimbs[f.objective == kObjectiveHead ? 0 : f.objective == kObjectiveTorso ? 1 : 2];
+            if (read16(field(target, limb)) < 0x8000u)
+                write16(field(target, kHp), read16(field(target, kHpMax)));
+            else
+                for (int p = first; p <= last; ++p)
+                    knockOut(p);
+        }
+
+        for (int p = 1; p <= last; ++p)
+        {
+            const Fighter &fighter = f.fighters[static_cast<size_t>(p - 1)];
+            const bool human = freeHuman(f, p);
+            applyStrength(p, fighter.strength);
+            scaleFreeHealth(p, fighter.health);
+            if (!human && kAis[fighter.ai].value)
+                write32(field(p, kAiProfile), kAis[fighter.ai].value);
+            applySwitches(p, fighter, human);
+        }
+    }
+
+    // Enhanced camera: L3 on controller 1 switches it on, R3 off (the bytes are written while the button is held).
+    bool g_cameraOn = false;
+
+    void applyCamera(bool option)
+    {
+        if (!option)
+        {
+            if (g_cameraOn)
+            {
+                write8(kCameraA, 0);
+                write8(kCameraB, 6);
+                g_cameraOn = false;
+            }
+            return;
+        }
+        const uint16_t pad = read16(kPad1Buttons);
+        const bool l3 = (pad & 0x0002u) == 0, r3 = (pad & 0x0004u) == 0;
+        if (l3 == r3) // neither, or both (a pad that was never read is all 0)
+            return;
+        g_cameraOn = l3;
+        write8(kCameraA, l3 ? 8 : 0);
+        write8(kCameraB, l3 ? 5 : 6);
+    }
+
     void onFrame(void *)
     {
         trace();
@@ -582,7 +848,16 @@ namespace
                 write32(kMovesTable + 12u, kBrad);
             }
         }
-        if (!config.on)
+        // Story / Free Mode only: the other modes already have this camera (and their bytes are left alone).
+        if (read32(kGameMode) == 1u)
+            applyCamera(config.camera);
+        else
+            g_cameraOn = false;
+        // Free Mode: with it on, the players / bots part below (Multiplayer) is left out in story / Free Mode.
+        const bool freeMode = config.free.on && read32(kGameMode) == 1u;
+        if (freeMode)
+            applyFree(config.free);
+        if (!config.on || freeMode)
         {
             for (int player = 5; player <= 8; ++player)
                 resetExtra(player);
@@ -645,6 +920,94 @@ namespace
     {
         static const char *const names[] = {"A", "B", "C", "D"};
         return names[std::clamp(team, 0, 3)];
+    }
+
+    std::string characterName(int id)
+    {
+        for (const Character &c : kCharacters)
+            if (c.id == id)
+                return c.name;
+        char name[16];
+        std::snprintf(name, sizeof(name), "0x%02X", id);
+        return name;
+    }
+
+    const char *const *characterNames()
+    {
+        static std::array<const char *, kCharacterCount> names = []
+        {
+            std::array<const char *, kCharacterCount> list{};
+            for (int i = 0; i < kCharacterCount; ++i)
+                list[static_cast<size_t>(i)] = kCharacters[i].name;
+            return list;
+        }();
+        return names.data();
+    }
+
+    // The AI list; in Free Mode the first item ("default") is the mission's own AI.
+    const char *const *aiNames(bool freeMode)
+    {
+        static std::array<std::array<const char *, kAiCount>, 4> lists = []
+        {
+            std::array<std::array<const char *, kAiCount>, 4> all{};
+            for (size_t n = 0; n < all.size(); ++n)
+            {
+                const bool inPt = n & 1u, mission = n & 2u;
+                for (int i = 0; i < kAiCount; ++i)
+                    all[n][static_cast<size_t>(i)] = inPt ? kAis[i].pt : kAis[i].en;
+                if (mission)
+                    all[n][0] = inPt ? "Da missão" : "From the mission";
+            }
+            return all;
+        }();
+        return lists[(pt() ? 1u : 0u) | (freeMode ? 2u : 0u)].data();
+    }
+
+    // The mission's original enemies (characters of its own records).
+    std::vector<int> missionEnemies(int mission)
+    {
+        const std::array<Record, 6> records = missionRecords(mission);
+        std::vector<int> enemies;
+        for (int i = 0; i < freemode::kMissions[mission - 1].count; ++i)
+            enemies.push_back(static_cast<int>(records[static_cast<size_t>(i)][0]));
+        return enemies;
+    }
+
+    std::string joinNames(const std::vector<int> &characters, bool unique)
+    {
+        std::vector<std::string> names;
+        for (int id : characters)
+        {
+            std::string name = characterName(id);
+            if (!unique || std::find(names.begin(), names.end(), name) == names.end())
+                names.push_back(name);
+        }
+        std::string text;
+        for (const std::string &name : names)
+            text += (text.empty() ? "" : ", ") + name;
+        return text;
+    }
+
+    // "Mission 12 - Back Alley - 4 enemies: Bain, Cooper"
+    const char *const *missionNames()
+    {
+        static std::vector<std::string> labels[2];
+        static std::vector<const char *> items[2];
+        const size_t lang = pt() ? 1u : 0u;
+        if (labels[lang].empty())
+        {
+            for (int m = 1; m <= 100; ++m)
+            {
+                const int count = freemode::kMissions[m - 1].count;
+                char head[96];
+                std::snprintf(head, sizeof(head), lang ? "Missão %d - %s - %d inimigo%s: " : "Mission %d - %s - %d enem%s: ", m,
+                              kFreeStages[kMissionStage[m - 1]].name, count, lang ? (count > 1 ? "s" : "") : (count > 1 ? "ies" : "y"));
+                labels[lang].push_back(head + joinNames(missionEnemies(m), true));
+            }
+            for (const std::string &label : labels[lang])
+                items[lang].push_back(label.c_str());
+        }
+        return items[lang].data();
     }
 
     // Strength, health and the limbs switch; infinite SPA only for humans.
@@ -744,27 +1107,6 @@ namespace
         }
 
         ui->separator_text(tr("4. Bots", "4. Bots"));
-        static std::array<const char *, kCharacterCount> names = []
-        {
-            std::array<const char *, kCharacterCount> list{};
-            for (int i = 0; i < kCharacterCount; ++i)
-                list[static_cast<size_t>(i)] = kCharacters[i].name;
-            return list;
-        }();
-        static std::array<const char *, kAiCount> aiPt = []
-        {
-            std::array<const char *, kAiCount> list{};
-            for (int i = 0; i < kAiCount; ++i)
-                list[static_cast<size_t>(i)] = kAis[i].pt;
-            return list;
-        }();
-        static std::array<const char *, kAiCount> aiEn = []
-        {
-            std::array<const char *, kAiCount> list{};
-            for (int i = 0; i < kAiCount; ++i)
-                list[static_cast<size_t>(i)] = kAis[i].en;
-            return list;
-        }();
         for (size_t i = 0; i < c.bots.size(); ++i)
         {
             Fighter &bot = c.bots[i];
@@ -783,7 +1125,7 @@ namespace
             {
                 int index = characterIndex(bot.character);
                 ui->set_next_width(200.0f);
-                if (ui->combo(tr("Lutador", "Fighter"), &index, names.data(), kCharacterCount))
+                if (ui->combo(tr("Lutador", "Fighter"), &index, characterNames(), kCharacterCount))
                 {
                     bot.character = kCharacters[index].id;
                     changed = true;
@@ -797,7 +1139,7 @@ namespace
                 ui->same_line();
             }
             ui->set_next_width(240.0f);
-            if (ui->combo(tr("IA", "AI"), &bot.ai, pt() ? aiPt.data() : aiEn.data(), kAiCount))
+            if (ui->combo(tr("IA", "AI"), &bot.ai, aiNames(false), kAiCount))
                 changed = true;
             drawFighterOptions(ui, bot, changed, false);
             ui->unindent();
@@ -868,11 +1210,253 @@ namespace
                              "Stage and global options work even with players and bots off (Multiplayer only)."));
     }
 
+    const char *freeSlotLabel(const FreeConfig &f, int p, char *line, size_t size)
+    {
+        if (p == 1)
+            return tr("P1: você (controle 1)", "P1: you (controller 1)");
+        if (p == 2)
+            return f.humans >= 2 ? tr("P2: parceiro (controle 2)", "P2: partner (controller 2)") : tr("P2: parceiro (IA)", "P2: partner (AI)");
+        if (freeHuman(f, p))
+            std::snprintf(line, size, tr("P%d: humano (controle %d), no seu time", "P%d: human (controller %d), on your team"), p, p);
+        else
+            std::snprintf(line, size, tr("P%d: inimigo", "P%d: enemy"), p);
+        return line;
+    }
+
+    // The character of P3..P8 (a record of the list): the one chosen here, or the mission's.
+    std::string freeCharacter(const FreeConfig &f, int p)
+    {
+        const int chosen = f.fighters[static_cast<size_t>(p - 1)].character;
+        return characterName(chosen >= 0 ? chosen : static_cast<int>(missionRecords(f.mission)[static_cast<size_t>(p - 3)][0]));
+    }
+
+    void drawFree(const UrbanModUi *ui, Config &c, bool &changed)
+    {
+        FreeConfig &f = c.free;
+        int on = f.on ? 1 : 0;
+        if (ui->checkbox(tr("Free Mode ligado (use só no Free Mode)", "Free Mode on (use it in Free Mode only)"), &on))
+        {
+            f.on = on != 0;
+            changed = true;
+        }
+        ui->text_disabled(tr("Vale só na missão escolhida aqui. Inimigos e personagens entram quando a missão carrega; força, vida, IA e o resto valem na hora.",
+                             "Only applies to the mission chosen here. Enemies and characters join when the mission loads; strength, health, AI and the rest apply at once."));
+        ui->begin_disabled(!f.on);
+
+        ui->separator_text(tr("1. Quantas pessoas vão jogar?", "1. How many people will play?"));
+        for (int n = 1; n <= 4; ++n)
+        {
+            char label[16];
+            std::snprintf(label, sizeof(label), "%d##freehumans", n);
+            if (ui->radio(label, f.humans == n))
+            {
+                f.humans = n;
+                f.enemies = std::min(f.enemies, 6 - freeExtraHumans(f));
+                changed = true;
+            }
+            if (n < 4)
+                ui->same_line();
+        }
+        ui->text_disabled(tr("P1 = você · P2 = parceiro (controle 2 ou IA) · P3/P4 = controles 3/4, no seu time.",
+                             "P1 = you · P2 = partner (controller 2 or AI) · P3/P4 = controllers 3/4, on your team."));
+        int partner = f.forcePartner ? 1 : 0;
+        if (ui->checkbox(tr("Forçar o parceiro (P2) em toda missão", "Force the partner (P2) in every mission"), &partner))
+        {
+            f.forcePartner = partner != 0;
+            changed = true;
+        }
+        ui->text_disabled(f.forcePartner
+            ? tr("O parceiro entra mesmo nas missões sem ele, no ponto de nascimento dele.", "The partner joins even in the missions without one, at its spawn point.")
+            : tr("Desligado: o parceiro vem como no jogo (o menu da missão pode deixar ele de fora). Com 2+ jogadores, o P2 precisa do parceiro.",
+                 "Off: the partner comes as in the game (the mission's menu can leave it out). With 2+ players, P2 needs the partner."));
+
+        ui->separator_text(tr("2. Missão", "2. Mission"));
+        int mission = f.mission - 1;
+        ui->set_next_width(560.0f);
+        if (ui->combo(tr("Missão", "Mission"), &mission, missionNames(), 100))
+        {
+            f.mission = mission + 1;
+            f.enemies = std::min(6 - freeExtraHumans(f), static_cast<int>(freemode::kMissions[mission].count));
+            for (int p = 3; p <= 8; ++p)
+                f.fighters[static_cast<size_t>(p - 1)].character = -1;
+            changed = true;
+        }
+        const std::vector<int> original = missionEnemies(f.mission);
+        char line[256];
+        std::snprintf(line, sizeof(line), tr("Inimigos originais (%zu): %s", "Original enemies (%zu): %s"), original.size(), joinNames(original, false).c_str());
+        ui->text_disabled(line);
+        const int gameMission = read16(kMission);
+        if (read32(kGameMode) == 1u && gameMission < 100)
+        {
+            std::snprintf(line, sizeof(line), tr("No jogo agora: missão %d", "In the game now: mission %d"), gameMission + 1);
+            if (gameMission + 1 == f.mission)
+                ui->text_colored(0xFF5AD25Au, line);
+            else
+                ui->text_disabled(line);
+        }
+        ui->text(tr("Quantidade de inimigos:", "Number of enemies:"));
+        for (int n = 1; n <= 6 - freeExtraHumans(f); ++n)
+        {
+            ui->same_line();
+            char label[16];
+            std::snprintf(label, sizeof(label), "%d##freeenemies", n);
+            if (ui->radio(label, freeEnemies(f) == n))
+            {
+                f.enemies = n;
+                changed = true;
+            }
+        }
+        ui->end_disabled();
+        int camera = c.camera ? 1 : 0;
+        if (ui->checkbox(tr("Enhanced camera (L3 liga, R3 desliga)", "Enhanced camera (L3 on, R3 off)"), &camera))
+        {
+            c.camera = camera != 0;
+            changed = true;
+        }
+        ui->text_disabled(tr("Controle 1, só no Free Mode (os outros modos já têm essa câmera); não depende do \"Free Mode ligado\".",
+                             "Controller 1, Free Mode only (the other modes already have this camera); does not depend on \"Free Mode on\"."));
+        ui->begin_disabled(!f.on);
+
+        ui->separator_text(tr("3. Objetivo", "3. Objective"));
+        static const char *const objectivesPt[] = {"Original da missão", "Derrotar todos", "Derrotar um inimigo específico",
+                                                   "Quebrar as pernas de um inimigo", "Quebrar o tronco de um inimigo", "Quebrar a cabeça de um inimigo"};
+        static const char *const objectivesEn[] = {"Mission's original", "Defeat everyone", "Defeat a specific enemy",
+                                                   "Break an enemy's legs", "Break an enemy's torso", "Break an enemy's head"};
+        ui->set_next_width(280.0f);
+        if (ui->combo(tr("Objetivo", "Objective"), &f.objective, pt() ? objectivesPt : objectivesEn, kObjectiveCount))
+            changed = true;
+        if (f.objective >= kObjectiveTarget)
+        {
+            const int first = freeFirstEnemy(f);
+            std::vector<std::string> targets;
+            for (int p = first; p <= freeLastEnemy(f); ++p)
+                targets.push_back("P" + std::to_string(p) + " - " + freeCharacter(f, p));
+            std::vector<const char *> items;
+            for (const std::string &t : targets)
+                items.push_back(t.c_str());
+            int target = freeTarget(f) - first;
+            ui->same_line();
+            ui->set_next_width(220.0f);
+            if (ui->combo(tr("Alvo", "Target"), &target, items.data(), static_cast<int>(items.size())))
+            {
+                f.target = first + target;
+                changed = true;
+            }
+            ui->text_disabled(f.objective == kObjectiveTarget
+                ? tr("Quando o alvo cai, os outros inimigos caem junto e a missão termina.",
+                     "When the target falls, the other enemies fall too and the mission ends.")
+                : tr("O alvo não cai enquanto o membro não quebrar; quando quebra, todos os inimigos caem e a missão termina.",
+                     "The target does not fall until the limb breaks; when it breaks, every enemy falls and the mission ends."));
+        }
+
+        ui->separator_text(tr("4. Lutadores", "4. Fighters"));
+        const int first = freeFirstEnemy(f), last = freeLastEnemy(f);
+        ui->text(tr("Vida de todos os inimigos:", "Health of all enemies:"));
+        static const char *const health[] = {"x1", "x1.5", "x2", "x3"};
+        for (int h = 0; h < 4; ++h)
+        {
+            ui->same_line();
+            char label[24];
+            std::snprintf(label, sizeof(label), "%s##allhealth", health[h]);
+            if (ui->small_button(label))
+            {
+                for (int p = first; p <= last; ++p)
+                    f.fighters[static_cast<size_t>(p - 1)].health = h;
+                changed = true;
+            }
+        }
+        std::vector<const char *> allAi{tr("- escolher -", "- choose -")};
+        for (int i = 0; i < kAiCount; ++i)
+            allAi.push_back(aiNames(true)[i]);
+        int pick = 0;
+        ui->set_next_width(300.0f);
+        if (ui->combo(tr("IA de todos os inimigos", "AI of all enemies"), &pick, allAi.data(), static_cast<int>(allAi.size())) && pick > 0)
+        {
+            for (int p = first; p <= last; ++p)
+                f.fighters[static_cast<size_t>(p - 1)].ai = pick - 1;
+            changed = true;
+        }
+        const std::array<Record, 6> records = missionRecords(f.mission);
+        for (int p = 1; p <= last; ++p)
+        {
+            Fighter &fighter = f.fighters[static_cast<size_t>(p - 1)];
+            const bool human = freeHuman(f, p);
+            ui->push_id(300 + p);
+            ui->text(freeSlotLabel(f, p, line, sizeof(line)));
+            ui->indent();
+            if (p >= 3)
+            {
+                const std::string originalName = tr("Original: ", "Original: ") + characterName(static_cast<int>(records[static_cast<size_t>(p - 3)][0]));
+                std::vector<const char *> items{originalName.c_str()};
+                for (int i = 0; i < kCharacterCount; ++i)
+                    items.push_back(characterNames()[i]);
+                int index = fighter.character < 0 ? 0 : characterIndex(fighter.character) + 1;
+                ui->set_next_width(200.0f);
+                if (ui->combo(tr("Lutador", "Fighter"), &index, items.data(), static_cast<int>(items.size())))
+                {
+                    fighter.character = index == 0 ? -1 : kCharacters[index - 1].id;
+                    changed = true;
+                }
+                if (!human)
+                    ui->same_line();
+            }
+            if (!human)
+            {
+                ui->set_next_width(240.0f);
+                if (ui->combo(tr("IA", "AI"), &fighter.ai, aiNames(true), kAiCount))
+                    changed = true;
+            }
+            drawFighterOptions(ui, fighter, changed, human);
+            ui->unindent();
+            ui->pop_id();
+        }
+        ui->text_disabled(tr("P1 e P2 escolhem o lutador no menu do jogo.", "P1 and P2 pick their fighter in the game's menu."));
+        ui->end_disabled();
+    }
+
+    void drawHowToFree(const UrbanModUi *ui, const FreeConfig &f)
+    {
+        char line[256];
+        ui->separator_text(tr("Como usar: Free Mode", "How to use: Free Mode"));
+        ui->text_wrapped(tr("1. Ligue \"Free Mode ligado\" na aba Free Mode e monte a missão.", "1. Switch \"Free Mode on\" on in the Free Mode tab and set up the mission."));
+        std::snprintf(line, sizeof(line), tr("2. No jogo: Free Mode > Missão %d.", "2. In the game: Free Mode > Mission %d."), f.mission);
+        ui->text_wrapped(line);
+        std::snprintf(line, sizeof(line), tr("3. Conecte %d controle(s):", "3. Plug in %d controller(s):"), f.humans);
+        ui->text_wrapped(line);
+        for (int p = 1; p <= std::min(4, f.humans < 3 ? 2 : f.humans); ++p)
+        {
+            char slot[96];
+            std::string text = std::string("   ") + freeSlotLabel(f, p, slot, sizeof(slot));
+            if (p >= 3)
+                text += " - " + freeCharacter(f, p);
+            ui->text(text.c_str());
+        }
+        std::string enemies;
+        for (int p = freeFirstEnemy(f); p <= freeLastEnemy(f); ++p)
+            enemies += (enemies.empty() ? "" : ", ") + ("P" + std::to_string(p) + " " + freeCharacter(f, p));
+        std::snprintf(line, sizeof(line), tr("4. Inimigos (%d): %s.", "4. Enemies (%d): %s."), freeEnemies(f), enemies.c_str());
+        ui->text_wrapped(line);
+        ui->text_wrapped(f.forcePartner ? tr("5. O parceiro (P2) entra em toda missão.", "5. The partner (P2) joins every mission.")
+                                        : tr("5. Parceiro (P2): ligue ou desligue no menu da missão no jogo (com 2+ jogadores, deixe ligado).",
+                                             "5. Partner (P2): switch it on or off in the game's mission menu (with 2+ players, leave it on)."));
+        ui->text_wrapped(tr("6. Enhanced camera (se ligada): L3 no controle 1 liga, R3 desliga.", "6. Enhanced camera (if switched on): L3 on controller 1 switches it on, R3 off."));
+
+        ui->separator_text(tr("Limitações: Free Mode", "Limitations: Free Mode"));
+        ui->text_wrapped(tr("- Só vale na missão escolhida aqui; as outras ficam originais. Com o Free Mode ligado, a parte de jogadores e bots do Multiplayer fica parada no modo história e no Free Mode.",
+                            "- Only the mission chosen here changes; the others stay original. With Free Mode on, the Multiplayer players / bots part stays idle in story mode and Free Mode."));
+        ui->text_wrapped(tr("- Inimigos, quantidade e personagens são lidos quando a missão carrega: mudou, recomece a missão.",
+                            "- Enemies, their number and characters are read when the mission loads: after a change, start the mission again."));
+        ui->text_wrapped(tr("- P3/P4 humanos vêm da lista de inimigos: a missão conta eles como inimigos. Quando todos os inimigos caem, o CoopTool derruba P3/P4 para a missão terminar (nas missões de quebrar membros, quebra o membro deles).",
+                            "- Human P3/P4 come from the enemy list: the mission counts them as enemies. When every enemy falls, CoopTool knocks P3/P4 out so that the mission ends (in the limb missions it breaks their limb)."));
+        ui->text_wrapped(tr("- O jogo só tem 8 lutadores: com P3/P4 humanos sobram menos vagas de inimigo. Inimigos além dos da missão são cópias deles, espalhadas pela fase.",
+                            "- The game only has 8 fighters: human P3/P4 leave fewer enemy slots. Enemies beyond the mission's own are copies of them, spread over the stage."));
+    }
+
     void drawHowTo(const UrbanModUi *ui, const Config &c)
     {
         const int menu = std::min(4, c.humans + static_cast<int>(c.bots.size()));
         char line[160];
-        ui->separator_text(tr("Como usar", "How to use"));
+        ui->separator_text(tr("Como usar: Multiplayer", "How to use: Multiplayer"));
         ui->text_wrapped(tr("1. Ligue o CoopTool na aba Multiplayer e monte a luta.", "1. Switch CoopTool on in the Multiplayer tab and set up the fight."));
         std::snprintf(line, sizeof(line), tr("2. No jogo: Multiplayer > %s.", "2. In the game: Multiplayer > %s."),
                       c.mode == 1 ? "Team Battle" : tr("batalha sem times", "battle without teams"));
@@ -896,9 +1480,9 @@ namespace
             ui->text_wrapped(tr("4. Os bots extras (P5-P8) entram sozinhos quando a luta carrega, em todas as lutas.",
                                 "4. The extra bots (P5-P8) join on their own when the fight loads, in every fight."));
 
-        ui->separator_text(tr("Limitações", "Limitations"));
-        ui->text_wrapped(tr("- Use só no Multiplayer e desligue no modo história e no Free Mode (lá o P5-P8 são inimigos de verdade).",
-                            "- Use it in Multiplayer only; switch it off in story mode and Free Mode (there P5-P8 are real enemies)."));
+        ui->separator_text(tr("Limitações: Multiplayer", "Limitations: Multiplayer"));
+        ui->text_wrapped(tr("- Use só no Multiplayer e desligue no modo história e no Free Mode (lá o P5-P8 são inimigos de verdade). Para o Free Mode use a aba Free Mode: com ela ligada, esta parte fica parada lá.",
+                            "- Use it in Multiplayer only; switch it off in story mode and Free Mode (there P5-P8 are real enemies). For Free Mode use the Free Mode tab: with it on, this part stays idle there."));
         ui->text_wrapped(tr("- Bots extras ligados no meio de uma luta só entram na próxima: o jogo só monta os lutadores quando a luta carrega.",
                             "- Extra bots switched on during a fight only join the next one: the game only sets up the fighters when the fight loads."));
         ui->text_wrapped(tr("- Os bots extras usam os golpes do Brad: alguém em P1-P4 precisa estar com o Brad (ou ligue \"Forçar P4 como Brad\"). O lutador escolhido muda só a aparência.",
@@ -930,9 +1514,15 @@ namespace
                 drawSettings(ui, config, changed);
                 ui->end_tab();
             }
+            if (ui->begin_tab("Free Mode"))
+            {
+                drawFree(ui, config, changed);
+                ui->end_tab();
+            }
             if (ui->begin_tab(tr("Como usar", "How to use")))
             {
                 drawHowTo(ui, config);
+                drawHowToFree(ui, config.free);
                 ui->end_tab();
             }
             ui->end_tab_bar();
