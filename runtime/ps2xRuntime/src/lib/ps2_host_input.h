@@ -18,4 +18,6 @@ namespace ps2_host_input
     [[nodiscard]] ps2x::iop::PadInputState padState(uint32_t port, uint32_t slot = 0u);
     // The motors the game set on that pad (any thread); played on the controllers of its LargeMotor/SmallMotor bindings.
     void setVibration(uint32_t port, uint32_t slot, uint8_t smallMotor, uint8_t largeMotor);
+    // While blocked (the in-game menu is open) every pad stays plugged in but idle, so the game keeps running.
+    void setBlocked(bool blocked);
 }

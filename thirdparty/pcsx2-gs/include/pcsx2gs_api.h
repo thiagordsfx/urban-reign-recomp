@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define PCSX2GS_API_VERSION 3u
+#define PCSX2GS_API_VERSION 4u
 
 typedef struct Pcsx2GsOpenParams
 {
@@ -46,6 +46,67 @@ typedef struct Pcsx2GsPrivRegs
     uint64_t siglblid;
 } Pcsx2GsPrivRegs;
 
+// In-game menu (version 4): a small immediate-mode UI on top of the image, drawn with the DLL's own ImGui. The draw
+// callback set with set_menu runs on the GS thread at every present and builds the menu with these calls (UTF-8
+// strings; the bool results say "clicked" / "changed" / "open"). Mods will draw their panels with the same table.
+typedef struct Pcsx2GsUi
+{
+    uint32_t version;
+    int (*begin_window)(const char *title, int *open, float width, float height); // centered the first time
+    void (*end_window)(void);
+    int (*begin_tab_bar)(const char *id);
+    void (*end_tab_bar)(void);
+    int (*begin_tab)(const char *label);
+    void (*end_tab)(void);
+    void (*text)(const char *text);
+    void (*text_wrapped)(const char *text);
+    void (*text_disabled)(const char *text);
+    void (*text_colored)(uint32_t rgba, const char *text); // R in the low byte
+    void (*heading)(const char *text);                     // larger text for titles
+    int (*checkbox)(const char *label, int *value);
+    int (*button)(const char *label);
+    void (*same_line)(void);
+    void (*separator)(void);
+    void (*spacing)(void);
+    int (*begin_child)(const char *id, float width, float height); // scrolling area (0 = fill)
+    void (*end_child)(void);
+    void (*push_id)(int id);
+    void (*pop_id)(void);
+    // version 2
+    int (*combo)(const char *label, int *current, const char *const *items, int count); // "##id" hides the label
+    int (*radio)(const char *label, int active);
+    int (*small_button)(const char *label);
+    void (*separator_text)(const char *text);
+    void (*indent)(void);
+    void (*unindent)(void);
+    void (*set_next_width)(float width); // width of the next item (0 = default)
+    void (*begin_disabled)(int disabled);
+    void (*end_disabled)(void);
+} Pcsx2GsUi;
+
+typedef void (*Pcsx2GsMenuFn)(const Pcsx2GsUi *ui, void *user);
+
+// Input for the menu, sent by the game window while it is open (any thread; the latest one is used at the next
+// frame). Mouse in client pixels; keys and buttons are "held" bits.
+typedef struct Pcsx2GsMenuInput
+{
+    float mouse_x;
+    float mouse_y;
+    uint32_t mouse_buttons; // bit 0 left, 1 right, 2 middle
+    float wheel;            // notches since the last input (positive = up)
+    uint32_t keys;          // PCSX2GS_KEY_* bits held
+    uint32_t pad;           // PCSX2GS_PAD_* bits held (any controller)
+} Pcsx2GsMenuInput;
+
+enum
+{
+    PCSX2GS_KEY_UP = 1u << 0, PCSX2GS_KEY_DOWN = 1u << 1, PCSX2GS_KEY_LEFT = 1u << 2, PCSX2GS_KEY_RIGHT = 1u << 3,
+    PCSX2GS_KEY_ENTER = 1u << 4, PCSX2GS_KEY_SPACE = 1u << 5, PCSX2GS_KEY_ESCAPE = 1u << 6, PCSX2GS_KEY_TAB = 1u << 7,
+    PCSX2GS_KEY_SHIFT = 1u << 8, PCSX2GS_KEY_CTRL = 1u << 9,
+    PCSX2GS_PAD_UP = 1u << 0, PCSX2GS_PAD_DOWN = 1u << 1, PCSX2GS_PAD_LEFT = 1u << 2, PCSX2GS_PAD_RIGHT = 1u << 3,
+    PCSX2GS_PAD_ACCEPT = 1u << 4, PCSX2GS_PAD_BACK = 1u << 5, PCSX2GS_PAD_L1 = 1u << 6, PCSX2GS_PAD_R1 = 1u << 7,
+};
+
 typedef struct Pcsx2GsApi
 {
     uint32_t version;
@@ -79,6 +140,9 @@ typedef struct Pcsx2GsApi
     void (*set_osd)(const char *top, uint32_t top_rgba, float top_alpha, const char *bottom);
     // Debug: writes the image the GS shows now (internal resolution, before window scaling) as a 24-bit .bmp.
     int (*snapshot)(const char *path);
+    // In-game menu: draw = NULL hides it. Any thread.
+    void (*set_menu)(Pcsx2GsMenuFn draw, void *user);
+    void (*menu_input)(const Pcsx2GsMenuInput *input);
 } Pcsx2GsApi;
 
 typedef const Pcsx2GsApi *(*Pcsx2GsGetApiFn)(uint32_t version);

@@ -19,6 +19,8 @@ namespace ps2x::savestate
     void requestLoad(std::filesystem::path path);
     void requestQuickSave();
     void requestQuickLoad();
+    // States loaded so far (it changes right after a load, before the game runs again).
+    [[nodiscard]] uint32_t loadCount();
 
     [[nodiscard]] bool overlayMessage(std::string &text, float &alpha);
 }

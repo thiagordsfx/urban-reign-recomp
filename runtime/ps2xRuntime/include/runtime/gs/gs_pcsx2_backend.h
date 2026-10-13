@@ -26,6 +26,10 @@ public:
     // Any thread: the host overlays drawn over the GS image (top: message box with background rgba and fade; bottom:
     // the FPS line). Empty = none.
     static void SetOsd(const char *top, uint32_t topRgba, float topAlpha, const char *bottom);
+    // Any thread: the in-game menu (pcsx2gs_api.h set_menu: draw is a Pcsx2GsMenuFn, NULL hides it) and its input
+    // (a Pcsx2GsMenuInput).
+    static void SetMenu(void *draw, void *user);
+    static void SetMenuInput(const void *input);
     // Main thread: hides the GS image while a host UI drawn by raylib (the F1 debugger) is open.
     static void SetHostUiVisible(bool visible);
     static bool HostUiVisible();

@@ -257,6 +257,18 @@ void GSPcsx2Backend::SetOsd(const char *top, uint32_t topRgba, float topAlpha, c
         g_api->set_osd(top, topRgba, topAlpha, bottom);
 }
 
+void GSPcsx2Backend::SetMenu(void *draw, void *user)
+{
+    if (g_api)
+        g_api->set_menu(reinterpret_cast<Pcsx2GsMenuFn>(draw), user);
+}
+
+void GSPcsx2Backend::SetMenuInput(const void *input)
+{
+    if (g_api && input)
+        g_api->menu_input(static_cast<const Pcsx2GsMenuInput *>(input));
+}
+
 uint64_t GSPcsx2Backend::Presents()
 {
     return g_presents.load(std::memory_order_relaxed);
@@ -555,6 +567,8 @@ void GSPcsx2Backend::AttachHostWindow(void *) {}
 void GSPcsx2Backend::HostTick() {}
 bool GSPcsx2Backend::Active() { return false; }
 void GSPcsx2Backend::SetOsd(const char *, uint32_t, float, const char *) {}
+void GSPcsx2Backend::SetMenu(void *, void *) {}
+void GSPcsx2Backend::SetMenuInput(const void *) {}
 void GSPcsx2Backend::SetHostUiVisible(bool) {}
 bool GSPcsx2Backend::HostUiVisible() { return false; }
 uint64_t GSPcsx2Backend::Presents() { return 0u; }

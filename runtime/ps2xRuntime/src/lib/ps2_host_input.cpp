@@ -936,6 +936,7 @@ namespace ps2_host_input
         // The motors each player's DualShock 2 was told to run (IOP thread), played on the controllers its
         // LargeMotor/SmallMotor bindings name (window thread). small: on/off, as on the pad; large: 0-255.
         std::array<std::atomic<uint16_t>, kMaxPlayers> g_motors{};
+        std::atomic<bool> g_blocked{false}; // the in-game menu has the input
 
         void updateVibration()
         {
@@ -983,8 +984,17 @@ namespace ps2_host_input
         const uint32_t taps = multitapPorts();
         const uint32_t players = 2u + ((taps & 1u) ? 3u : 0u) + ((taps & 2u) ? 3u : 0u);
         std::array<PadInputState, kMaxPlayers> state{};
+        const bool blocked = g_blocked.load(std::memory_order_relaxed);
         for (uint32_t player = 0; player < players; ++player)
+        {
             state[player] = readPort(player);
+            if (blocked)
+            {
+                PadInputState idle;
+                idle.connected = state[player].connected;
+                state[player] = idle;
+            }
+        }
         std::lock_guard<std::mutex> lock(g_mutex);
         g_state = state;
     }
@@ -1022,6 +1032,11 @@ namespace ps2_host_input
         g_ignoredMouseButton = -1;
         g_mouseMoved = false;
         recordMouseCameraInput({}, false);
+    }
+
+    void setBlocked(bool blocked)
+    {
+        g_blocked.store(blocked, std::memory_order_relaxed);
     }
 
     void setVibration(uint32_t port, uint32_t slot, uint8_t smallMotor, uint8_t largeMotor)

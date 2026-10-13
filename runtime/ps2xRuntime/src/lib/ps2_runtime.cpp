@@ -1,6 +1,8 @@
 #include "runtime/ps2_async_vif.h"
 #include "ps2_runtime.h"
 #include "runtime/ps2_save_state.h"
+#include "runtime/ps2_pnach.h"
+#include "runtime/ps2_game_menu.h"
 #include "runtime/ps2_display_options.h"
 #include "ps2_log.h"
 #include "ps2_stubs.h"
@@ -2964,7 +2966,7 @@ void PS2Runtime::run()
             std::string top;
             uint32_t topRgba = 0xCC000000u;
             float topAlpha = 0.0f;
-            if (ps2x::savestate::overlayMessage(top, topAlpha))
+            if (ps2x::savestate::overlayMessage(top, topAlpha) || ps2x::pnach::overlayMessage(top, topAlpha))
                 topRgba = 0x99000000u; // black, 60%
             else
             {
@@ -3101,6 +3103,9 @@ void PS2Runtime::run()
         }
 #endif
         ps2_host_input::sample();
+        if (IsKeyPressed(KEY_F4))
+            ps2x::pnach::requestReload(); // reload the enabled .pnach files
+        ps2x::menu::hostTick();           // F2: the in-game menu
         if (IsKeyPressed(KEY_F5))
             ps2x::savestate::requestQuickSave();
         if (IsKeyPressed(KEY_F9))

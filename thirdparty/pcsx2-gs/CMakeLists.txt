@@ -93,8 +93,11 @@ target_include_directories(pcsx2_gs INTERFACE
     "${P}" "${P}/pcsx2" "${CMAKE_CURRENT_SOURCE_DIR}/compat" "${P}/3rdparty/fmt/include")
 
 # --- our side: the host/VM functions the GS calls (phase 1: minimal) and the device test ---
+add_library(pcsx2gs_api INTERFACE)
+target_include_directories(pcsx2gs_api INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 add_library(pcsx2_gs_host STATIC compat/HostStubs.cpp compat/Pcsx2ConfigGS.cpp)
 target_link_libraries(pcsx2_gs_host PRIVATE pcsx2_flags)
+target_link_libraries(pcsx2_gs_host PUBLIC pcsx2gs_api) # the menu types (pcsx2gs_host.h)
 target_link_libraries(pcsx2_gs PUBLIC onecore pathcch dxcompiler delayimp)
 # dxcompiler.dll (DX12's shader compiler) only loads when the DX12 renderer is used.
 target_link_options(pcsx2_gs INTERFACE /DELAYLOAD:dxcompiler.dll)
@@ -104,8 +107,6 @@ target_link_libraries(pcsx2_gs_test PRIVATE pcsx2_flags pcsx2_gs pcsx2_gs_host)
 
 # pcsx2gs.dll: the GS behind the C interface of include/pcsx2gs_api.h (phase 2). urban.exe loads it at run time, so
 # PCSX2's ImGui, fmt etc. stay inside the DLL. Next to it: resources/shaders (read at run time by the devices).
-add_library(pcsx2gs_api INTERFACE)
-target_include_directories(pcsx2gs_api INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 add_library(pcsx2gs SHARED compat/Bridge.cpp)
 target_link_libraries(pcsx2gs PRIVATE pcsx2_flags pcsx2gs_api pcsx2_gs pcsx2_gs_host)
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

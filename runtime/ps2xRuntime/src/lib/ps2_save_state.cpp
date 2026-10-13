@@ -154,6 +154,13 @@ namespace ps2x::savestate
         r.quickSlot = std::move(path);
     }
 
+    std::atomic<uint32_t> g_loadCount{0};
+
+    uint32_t loadCount()
+    {
+        return g_loadCount.load(std::memory_order_acquire);
+    }
+
     std::filesystem::path quickSlotPath()
     {
         Registry &r = registry();
@@ -782,6 +789,7 @@ bool EeScheduler::serviceStateRequests()
         requestStop();
         return true;
     }
+    ps2x::savestate::g_loadCount.fetch_add(1u, std::memory_order_acq_rel);
     publishSnapshotNow();
     notify("State loaded (field " + std::to_string(m_vsyncTick) + ")");
     return true;
