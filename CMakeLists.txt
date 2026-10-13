@@ -26,12 +26,29 @@ set(PS2X_ENABLE_SCCACHE OFF CACHE BOOL "" FORCE)
 add_subdirectory(runtime EXCLUDE_FROM_ALL)
 add_subdirectory(src)
 
+# The mod kit's example (modsdk/): ExampleMod.dll in build/port/bin/mods/ExampleMod, to try the mod API.
+option(URBAN_BUILD_MOD_EXAMPLE "Build modsdk/example (ExampleMod.dll)" ON)
+if(URBAN_BUILD_MOD_EXAMPLE AND WIN32)
+    set(URBAN_MODS_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/mods")
+    add_subdirectory(modsdk/example)
+    add_dependencies(urban ExampleMod)
+endif()
+
+# The mods that ship with the game (mods/): built into build/port/bin/mods/<Name>.
+option(URBAN_BUILD_MODS "Build the mods in mods/ (CoopTool)" ON)
+if(URBAN_BUILD_MODS AND WIN32)
+    set(URBAN_MODS_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/mods")
+    add_subdirectory(mods/CoopTool)
+    add_dependencies(urban CoopTool)
+endif()
+
 # PCSX2's GS as pcsx2gs.dll (docs/GS_PCSX2.md): built with urban, loaded by it when [Video] Renderer=pcsx2.
 option(URBAN_PCSX2_GS "Build PCSX2's GS (pcsx2gs.dll)" ON)
 if(URBAN_PCSX2_GS AND WIN32)
     add_subdirectory(thirdparty/pcsx2-gs EXCLUDE_FROM_ALL)
     add_dependencies(urban pcsx2gs)
     target_link_libraries(ps2_runtime PRIVATE pcsx2gs_api)
+    target_link_libraries(urban PRIVATE pcsx2gs_api) # the in-game menu panels (src/urban/mods.cpp)
 endif()
 
 # URBAN_LTO: whole-program optimization (/GL, linked with /LTCG) of the runtime, the IOP and the port sources. The

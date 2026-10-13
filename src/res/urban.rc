@@ -1,0 +1,3 @@
+// urban.exe's icon (the same as the launcher's). GLFW (raylib's window) loads the resource named GLFW_ICON for the
+// window and the taskbar; Explorer shows the first icon of the file, this one.
+GLFW_ICON ICON "urban.ico"

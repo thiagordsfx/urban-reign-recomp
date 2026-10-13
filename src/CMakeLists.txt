@@ -31,6 +31,8 @@ set(URBAN_HOST_SOURCES
     urban/anim_decoder.cpp
     urban/hle_bindings.cpp
     urban/log.cpp
+    urban/mods.cpp
+    urban/mod_loader.cpp
     urban/native_profile.cpp
     urban/sha256.cpp
     urban/thread_policy.cpp
@@ -108,7 +110,7 @@ else()
 endif()
 
 add_executable(urban ${URBAN_HOST_SOURCES})
-target_include_directories(urban PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${URBAN_GENERATED_DIR}")
+target_include_directories(urban PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${URBAN_GENERATED_DIR}" "${CMAKE_SOURCE_DIR}/modsdk/include")
 target_link_libraries(urban PRIVATE urban_game_code ps2_runtime)
 
 if(MSVC)
@@ -117,6 +119,9 @@ if(MSVC)
     # /FORCE:MULTIPLE: WinAPI vs raylib CloseWindow clash. Large stack: deep guest call chains run on the host stack.
     target_link_options(urban PRIVATE /FORCE:MULTIPLE /STACK:16777216 $<$<CONFIG:RelWithDebInfo>:/LTCG>)
     target_link_libraries(urban PRIVATE dbghelp winmm)
+endif()
+if(WIN32)
+    target_sources(urban PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/res/urban.rc")
 endif()
 
 if(URBAN_DEBUG_UI AND TARGET rlImGui)

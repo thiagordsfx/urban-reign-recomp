@@ -83,10 +83,13 @@ namespace urban::calltrace
             if (g_hwHits.fetch_add(1) < 20000)
             {
                 const R5900Context *ctx = g_hwRuntime->eeScheduler().currentContext();
+                // With reads watched too, reading the address here would fire the watchpoint again inside the handler.
                 uint64_t value = 0;
-                std::memcpy(&value, reinterpret_cast<const void *>(g_hwHostAddress), g_hwLength);
+                if (!std::getenv("URBAN_HW_WATCH_RW"))
+                    std::memcpy(&value, reinterpret_cast<const void *>(g_hwHostAddress), g_hwLength);
                 char line[256];
-                std::snprintf(line, sizeof(line), "hw-watch write 0x%08x = 0x%llx guest pc=0x%08x ra=0x%08x host rip=0x%llx", g_hwGuestAddress,
+                std::snprintf(line, sizeof(line), "hw-watch %s 0x%08x = 0x%llx guest pc=0x%08x ra=0x%08x host rip=0x%llx",
+                              std::getenv("URBAN_HW_WATCH_RW") ? "access" : "write", g_hwGuestAddress,
                               static_cast<unsigned long long>(value), ctx ? ctx->pc : 0u, ctx ? getRegU32(ctx, 31) : 0u,
                               static_cast<unsigned long long>(info->ContextRecord->Rip));
                 URBAN_INFO(Game, line);
@@ -130,8 +133,10 @@ namespace urban::calltrace
             context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
             GetThreadContext(thread, &context);
             const uint64_t lenBits = g_hwLength == 8 ? 2u : g_hwLength == 4 ? 3u : g_hwLength == 2 ? 1u : 0u;
+            // URBAN_HW_WATCH_RW=1: reads too (R/W0 = 3); the default is writes only (R/W0 = 1).
+            const uint64_t rwBits = std::getenv("URBAN_HW_WATCH_RW") ? 3u : 1u;
             context.Dr0 = g_hwHostAddress;
-            context.Dr7 = (context.Dr7 & ~0xF0003ull) | 1ull /* L0 */ | (1ull << 16) /* R/W0 = write */ | (lenBits << 18);
+            context.Dr7 = (context.Dr7 & ~0xF0003ull) | 1ull /* L0 */ | (rwBits << 16) | (lenBits << 18);
             const bool ok = SetThreadContext(thread, &context) != FALSE;
             ResumeThread(thread);
             CloseHandle(thread);

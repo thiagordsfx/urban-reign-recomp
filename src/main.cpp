@@ -18,6 +18,9 @@
 #include "urban/thread_policy.h"
 #include "urban/hle_bindings.h"
 #include "urban/log.h"
+#include "urban/mods.h"
+#include "urban/mod_loader.h"
+#include "runtime/ps2_game_menu.h"
 
 #if defined(PS2X_ENABLE_DEBUG_UI)
 #include "ps2_debug_panel.h"
@@ -278,6 +281,9 @@ Iso=
 [Mods]
 # PCSX2 patches (.pnach) from the "mods" folder next to urban.exe that are on, separated by ";".
 Enabled=
+# DLL mods that are on (folders of the "mods" folder: mods\<Name>\<Name>.dll), separated by ";". Their options are
+# in the in-game menu (F2).
+Dlls=
 
 [Video]
 # Internal resolution: 1 = native PS2 (640x448), 2 = 1280x896, 3 = 1920x1344, 4 = 2560x1792 (up to 8).
@@ -358,6 +364,8 @@ URBAN_PROGRESSIVE=1
     constexpr ConfigSetting kConfigSettings[] = {
         {"game", "iso", "iso", "URBAN_ISO"},
         {"mods", "enabled", "enabled", "URBAN_MODS"},
+        {"mods", "dlls", "dlls", "URBAN_MOD_DLLS"},
+        {"launcher", "language", "language", "URBAN_LANGUAGE"},
         {"video", "internalresolution", "resolucaointerna", "PS2X_GS_SCALE"},
         {"video", "startmaximized", "maximizada", "URBAN_START_MAXIMIZED"},
         {"video", "startfullscreen", "telacheia", "URBAN_START_FULLSCREEN"},
@@ -414,6 +422,9 @@ URBAN_PROGRESSIVE=1
         if (legacy)
             replaceSettingsFile(path, path, fillTemplate(kDefaultConfig, values, "# Other settings (from the old config.ini)"));
     }
+
+    // True when the .pnach list comes from config.ini [Mods] Enabled (not from a PS2X_PNACH set by hand).
+    bool g_pnachFromMods = false;
 
     void loadConfigFile(const std::filesystem::path &path)
     {
@@ -518,26 +529,15 @@ URBAN_PROGRESSIVE=1
             out << "\n# New settings (added by urban.exe with their default value)" << missing;
         }
 
-        // [Mods] Enabled: the .pnach files of the "mods" folder, as PS2X_PNACH (unless that is set itself).
-        const char *mods = std::getenv("URBAN_MODS");
-        if (mods && *mods && !std::getenv("PS2X_PNACH"))
+        // [Mods] Enabled: the .pnach files of the "mods" folder, as PS2X_PNACH (unless that is set itself). Then the
+        // list is watched while the game runs (startPnachWatch).
+        if (!std::getenv("PS2X_PNACH"))
         {
+            g_pnachFromMods = true;
+            const char *mods = std::getenv("URBAN_MODS");
             std::string files;
-            std::istringstream list(mods);
-            std::string name;
-            while (std::getline(list, name, ';'))
-            {
-                name = trimText(name);
-                if (name.empty())
-                    continue;
-                const std::filesystem::path file = path.parent_path() / "mods" / name;
-                if (!std::filesystem::exists(file))
-                {
-                    std::cerr << "[mods] " << name << " is not in the mods folder" << std::endl;
-                    continue;
-                }
-                files += (files.empty() ? "" : ";") + file.string();
-            }
+            for (const std::string &file : urban::mods::pnachFiles(path, mods ? mods : "", true))
+                files += (files.empty() ? "" : ";") + file;
             if (!files.empty())
             {
 #if defined(_WIN32)
@@ -547,6 +547,25 @@ URBAN_PROGRESSIVE=1
 #endif
             }
         }
+    }
+
+    // While the game runs: the enabled .pnach files are reloaded when config.ini [Mods] Enabled (written by a
+    // launcher) or one of the files changes, or on F4 (ps2_pnach.cpp). A list set by hand in PS2X_PNACH stays fixed;
+    // only its files are watched.
+    void startPnachWatch(const std::filesystem::path &configPath)
+    {
+        if (g_pnachFromMods)
+        {
+            ps2x::pnach::watch([configPath] { return urban::mods::pnachFiles(configPath, urban::mods::readEnabled(configPath), false); });
+            return;
+        }
+        std::vector<std::string> fixed;
+        std::istringstream list(std::getenv("PS2X_PNACH") ? std::getenv("PS2X_PNACH") : "");
+        std::string file;
+        while (std::getline(list, file, ';'))
+            if (!(file = trimText(file)).empty())
+                fixed.push_back(file);
+        ps2x::pnach::watch([fixed] { return fixed; });
     }
 
     // controls.ini: PCSX2's controller sections ([InputSources], [Pad], [Pad1]-[Pad8], as in PCSX2.ini, so they can be
@@ -1097,6 +1116,18 @@ int main(int argc, char *argv[])
         // PS2X_PNACH=<file>[;<file>...] (controls.ini): PCSX2 patches; patch=0 lines now, patch=1 at every vblank.
         if (ps2x::pnach::loadFromEnvironment() != 0u)
             ps2x::pnach::applyOnce(runtime.memory().getRDRAM());
+        startPnachWatch(exeDir / "config.ini");
+        // F2: the in-game menu (PCSX2's GS only), with the mods tab.
+        {
+            const char *language = std::getenv("URBAN_LANGUAGE");
+            const bool portuguese = language && std::string(language) == "pt";
+            ps2x::menu::setTitle("MODS / PATCHES", portuguese ? "F2 fecha o menu. O jogo continua rodando."
+                                                              : "F2 closes the menu. The game keeps running.");
+            ps2x::menu::setEmptyText(portuguese ? "Nenhum mod ligado. Ligue os mods na aba Mods do launcher (config.ini [Mods] Dlls)."
+                                                : "No mod is on. Switch mods on in the launcher's Mods tab (config.ini [Mods] Dlls).");
+            const char *dlls = std::getenv("URBAN_MOD_DLLS");
+            urban::modloader::loadAll(exeDir / "mods", dlls ? dlls : "", portuguese ? "pt" : "en", runtime.memory().getRDRAM());
+        }
         PS2Runtime::setIoPaths(paths);
 
         const char *missingPolicy = std::getenv("URBAN_MISSING_FUNCTION");
