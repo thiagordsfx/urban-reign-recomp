@@ -54,6 +54,10 @@ and extract it into the `game\textures` folder (it should end up as `game\textur
 
 **Mods:** put mods (a folder with a `.dll`) or PCSX2 `.pnach` patches in `game\mods` and turn them on in the
 **Mods** tab; their options are in the in-game menu (**F2**). To make your own: the [mod kit](modsdk/README.md).
+The **CoopTool** mod comes with the game (`mods/CoopTool`): Multiplayer with up to 8 fighters (up to 4 humans plus
+bots, every one for himself or custom teams, Free Mode stages) and Free Mode missions with up to 4 players (number
+of enemies, objective, each fighter's character / AI / strength / health, optional partner, enhanced camera with
+L3 / R3). Its **How to use** tab explains each part.
 
 ### Requirements
 

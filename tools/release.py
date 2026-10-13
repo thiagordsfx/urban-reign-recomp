@@ -42,8 +42,8 @@ EN
 - Open "Urban Reign.exe". In the Game tab pick your own Urban Reign disc image (USA, SLUS-21209, .iso).
   The game is not included: you need your own copy.
 - Graphics, controllers (PCSX2 style, multitap, vibration) and mods are set in the launcher.
-- Mods: each mod is a folder in game\\mods (CoopTool comes with it); turn them on in the Mods tab, their options
-  are in the in-game menu (F2).
+- Mods: each mod is a folder in game\\mods; turn them on in the Mods tab, their options are in the in-game menu (F2).
+  CoopTool comes with it: Multiplayer with up to 8 fighters and Free Mode missions with up to 4 players.
 - HD textures: put a PCSX2 texture pack in game\\textures\\SLUS-21209 (the folder with "replacements").
 - In game: F11 fullscreen, F3 FPS counter, F5/F9 quick save/load state.
 - Needs Windows 10/11 64-bit, a DirectX 11 graphics card and a CPU with SSE4.1.
@@ -52,8 +52,8 @@ PT
 - Abra o "Urban Reign.exe". Na aba Jogo escolha a sua imagem do Urban Reign (EUA, SLUS-21209, .iso).
   O jogo não vem junto: você precisa da sua própria cópia.
 - Gráficos, controles (estilo PCSX2, multitap, vibração) e mods são configurados no launcher.
-- Mods: cada mod é uma pasta em game\\mods (o CoopTool já vem junto); ligue na aba Mods, as opções ficam no
-  menu do jogo (F2).
+- Mods: cada mod é uma pasta em game\\mods; ligue na aba Mods, as opções ficam no menu do jogo (F2).
+  O CoopTool já vem junto: Multiplayer com até 8 lutadores e missões do Free Mode com até 4 jogadores.
 - Texturas HD: coloque um pacote do PCSX2 em game\\textures\\SLUS-21209 (a pasta com "replacements").
 - No jogo: F11 tela cheia, F3 contador de FPS, F5/F9 salvar/carregar estado rápido.
 - Precisa de Windows 10/11 64 bits, placa de vídeo DirectX 11 e processador com SSE4.1.

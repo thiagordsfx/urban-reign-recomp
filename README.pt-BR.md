@@ -54,6 +54,10 @@ e extraia na pasta `game\textures` (tem que ficar `game\textures\SLUS-21209\repl
 
 **Mods:** coloque mods (uma pasta com a `.dll`) ou patches `.pnach` do PCSX2 em `game\mods` e ligue na aba
 **Mods**; as opções ficam no menu do jogo (**F2**). Para criar o seu: o [kit de mods](modsdk/README.md#português).
+O mod **CoopTool** já vem com o jogo (`mods/CoopTool`): Multiplayer com até 8 lutadores (até 4 humanos mais bots,
+cada um por si ou times personalizados, fases do Free Mode) e missões do Free Mode com até 4 jogadores (quantidade
+de inimigos, objetivo, personagem / IA / força / vida de cada lutador, parceiro opcional, enhanced camera com
+L3 / R3). A aba **Como usar** dele explica cada parte.
 
 ### Requisitos
 
