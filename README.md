@@ -8,7 +8,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?logo=windows&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Linux%20x86--64-FCC624?logo=linux&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.4.0-d9261c)
+![Version](https://img.shields.io/badge/version-1.4.1-d9261c)
 ![Status](https://img.shields.io/badge/status-beta-yellowgreen)
 ![Based on](https://img.shields.io/badge/based%20on-PS2Recomp-8A2BE2)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -67,7 +67,7 @@ L3 / R3). Its **How to use** tab explains each part.
 
 From the [**latest release**](../../releases/latest), pick one:
 
-- **`.deb`** (Debian, Ubuntu, Mint...): `sudo apt install ./urban-reign_1.4.0_amd64.deb` and open **Urban Reign** from
+- **`.deb`** (Debian, Ubuntu, Mint...): `sudo apt install ./urban-reign_1.4.1_amd64.deb` and open **Urban Reign** from
   the applications menu. Settings, saves and your own mods are in `~/.local/share/urban-reign` (HD textures go in
   `~/.local/share/urban-reign/textures/SLUS-21209`).
 - **`.tar.gz`** (any distribution): extract it and run **`urban-reign`**; everything stays in that folder, as with the

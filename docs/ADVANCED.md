@@ -50,7 +50,7 @@ Per-library and per-component breakdown: [`docs/status/details.en.md`](status/de
 | Real widescreen (the game's own 16:9 mode, on by default: more of the scene, not a stretched 4:3) | ✅ |
 | Multitap (up to 8 controllers; port 2 by default, as the game expects) | ✅ |
 | Controllers through SDL3 (PCSX2-style mapping, vibration) | ✅ |
-| Ready-to-play release (1.4.0) | ✅ |
+| Ready-to-play release (1.4.1) | ✅ |
 | Mods: in-game menu (F2), live .pnach, DLL mods + mod kit, CoopTool (multiplayer up to 8, humans too; Free Mode up to 4) | ✅ |
 
 The full investigation log (in Portuguese) is in [`docs/PROGRESS.md`](PROGRESS.md), and the plan in

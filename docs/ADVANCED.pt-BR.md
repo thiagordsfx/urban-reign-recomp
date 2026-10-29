@@ -50,7 +50,7 @@ Gerado a partir de [`docs/status/data.toml`](status/data.toml) por `python tools
 | Widescreen de verdade (o modo 16:9 do próprio jogo, ligado por padrão: mais da cena, não o 4:3 esticado) | ✅ |
 | Multitap (até 8 controles; porta 2 por padrão, como o jogo espera) | ✅ |
 | Controles pelo SDL3 (mapeamento no estilo do PCSX2, vibração) | ✅ |
-| Versão pronta para jogar (1.4.0) | ✅ |
+| Versão pronta para jogar (1.4.1) | ✅ |
 | Mods: menu no jogo (F2), .pnach ao vivo, mods em DLL + kit, CoopTool (multiplayer até 8, humanos também; Free Mode até 4) | ✅ |
 
 O histórico completo da investigação está em [`docs/PROGRESS.md`](PROGRESS.md), e o plano em

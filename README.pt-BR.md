@@ -8,7 +8,7 @@
 
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%20x64-0078D6?logo=windows&logoColor=white)
 ![Plataforma](https://img.shields.io/badge/plataforma-Linux%20x86--64-FCC624?logo=linux&logoColor=black)
-![Versão](https://img.shields.io/badge/vers%C3%A3o-1.4.0-d9261c)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-1.4.1-d9261c)
 ![Status](https://img.shields.io/badge/status-beta-yellowgreen)
 ![Baseado em](https://img.shields.io/badge/baseado%20em-PS2Recomp-8A2BE2)
 ![Licença](https://img.shields.io/badge/licen%C3%A7a-GPL--3.0-blue)
@@ -68,7 +68,7 @@ L3 / R3). A aba **Como usar** dele explica cada parte.
 
 Na [**versão mais recente**](../../releases/latest), escolha um dos dois:
 
-- **`.deb`** (Debian, Ubuntu, Mint...): `sudo apt install ./urban-reign_1.4.0_amd64.deb` e abra **Urban Reign** no
+- **`.deb`** (Debian, Ubuntu, Mint...): `sudo apt install ./urban-reign_1.4.1_amd64.deb` e abra **Urban Reign** no
   menu de aplicativos. As configurações, os saves e os seus mods ficam em `~/.local/share/urban-reign` (as texturas
   HD vão em `~/.local/share/urban-reign/textures/SLUS-21209`).
 - **`.tar.gz`** (qualquer distribuição): extraia e rode o **`urban-reign`**; tudo fica na própria pasta, como no ZIP do

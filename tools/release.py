@@ -27,7 +27,7 @@ WORK = ROOT / "build" / "launcher"
 VENV = WORK / "venv"
 LAUNCHER_EXE = WORK / "dist" / "Urban Reign.exe"
 RELEASE = ROOT / "build" / "release"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 GAME_ROOTS = ["urban.exe", "pcsx2gs.dll"]  # pcsx2gs.dll is loaded with LoadLibrary, not imported
 GAME_FOLDERS = ["resources", "shadercache_pcsx2"]
