@@ -31,6 +31,52 @@ void ps2xWakeEeForGsInterrupt() noexcept;          // EeScheduler.cpp
 
 void ps2xEeFlushDeferredCycles() noexcept; // Kernel/EeScheduler.cpp
 void ps2xEeClearLatchedDmac(uint32_t channels); // Kernel/EeScheduler.cpp
+bool ps2xGsInterruptUndelivered() noexcept;      // Kernel/EeScheduler.cpp
+bool ps2xGsStallActive();                       // gs/gs_frontend.cpp
+bool ps2xGsSignalQueuePending();
+
+namespace
+{
+    // MTVU: a GIF DMA the EE starts is over for the EE at once, but its data reaches the GS later, on the GIF thread,
+    // and the SIGNAL/FINISH it carries reaches the EE later still. On hardware D2_CHCR.STR stays set until the GS has
+    // taken the data, and the SIGNAL interrupt comes before the channel is free. Urban Reign's GS handler (0x10bc38)
+    // finds the next chunk of the frame's GIF chain from D2_TADR; the movie player, seeing the channel free, sent its
+    // picture in the middle of a frame (the VU worker had started late), the handler then kicked the movie's chain
+    // instead of the frame's, the frame's last SIGNAL never came and the intro movie froze (1 boot in 2 on Linux).
+    // So the EE reads STR = 1 while the VU/GIF workers have work, GIF data waits at a SIGNAL, or a GS interrupt has not
+    // been delivered. PS2X_GIF_BUSY_UNTIL_GS=0 turns it off. If it lasts 100 ms the EE sees the real value until the
+    // workers are idle once (a guest that polls with interrupts off could otherwise never let the GS go on).
+    bool gifStillRunningOnGs(PS2Memory &memory)
+    {
+        static const bool enabled = [] { const char *v = std::getenv("PS2X_GIF_BUSY_UNTIL_GS"); return !v || *v != '0'; }();
+        if (!enabled || !ps2x::asyncvif::active(memory))
+            return false;
+        static std::chrono::steady_clock::time_point busySince{};
+        static bool gaveUp = false;
+        const bool running = ps2x::asyncvif::pipelineBusy(memory) || ps2xGsStallActive() || ps2xGsSignalQueuePending() ||
+                             ps2xGsInterruptUndelivered();
+        if (!running)
+        {
+            busySince = {};
+            gaveUp = false;
+            return false;
+        }
+        if (gaveUp)
+            return false;
+        const auto now = std::chrono::steady_clock::now();
+        if (busySince == std::chrono::steady_clock::time_point{})
+            busySince = now;
+        else if (now - busySince > std::chrono::milliseconds(100))
+        {
+            gaveUp = true;
+            static std::atomic<uint32_t> s_gaveUp{0u};
+            if (s_gaveUp.fetch_add(1u) < 10u)
+                std::fprintf(stderr, "[mtvu] D2_CHCR busy for 100 ms; showing the EE the real STR\n");
+            return false;
+        }
+        return true;
+    }
+}
 
 namespace
 {
@@ -3514,6 +3560,8 @@ uint32_t PS2Memory::readIORegister(uint32_t address)
     if (address == kIntcStatAddress)
         return g_intcStat.load(std::memory_order_acquire);
     if (address == 0x10009000u && ps2x::asyncvif::vu1Busy(*this))
+        return (m_ioRegisters.count(address) ? m_ioRegisters[address] : 0u) | 0x100u;
+    if (address == 0x1000A000u && gifStillRunningOnGs(*this))
         return (m_ioRegisters.count(address) ? m_ioRegisters[address] : 0u) | 0x100u;
     if (isAsyncVifRegister(address))
         ps2x::asyncvif::sync(*this);

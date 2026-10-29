@@ -294,6 +294,8 @@ namespace urban::hangdump
         }
     }
 
+#endif
+
     void startFromEnvironment()
     {
         const char *delay = std::getenv("URBAN_HANG_DUMP");
@@ -308,8 +310,12 @@ namespace urban::hangdump
             std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
             do
             {
+#if defined(_WIN32)
                 if (nativeStacks)
                     dumpAllThreads();
+#else
+                (void)nativeStacks; // native stacks are Windows only
+#endif
                 dumpGuestKernel();
                 static const int top = [] { const char *v = std::getenv("URBAN_CALL_PROFILE_TOP"); return v ? std::atoi(v) : 30; }();
                 callprofile::report(top);
@@ -318,7 +324,4 @@ namespace urban::hangdump
             } while (repeatSeconds > 0);
         }).detach();
     }
-#else
-    void startFromEnvironment() {}
-#endif
 }
