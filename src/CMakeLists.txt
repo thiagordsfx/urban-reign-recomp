@@ -42,6 +42,7 @@ set(URBAN_HOST_SOURCES
     urban/game_disc.cpp
     urban/hang_dump.cpp
     urban/anim_decoder.cpp
+    urban/adx_output.cpp
     urban/aspect.cpp
     urban/hle_bindings.cpp
     urban/log.cpp

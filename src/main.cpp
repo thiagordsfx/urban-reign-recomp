@@ -8,6 +8,7 @@
 #include "runtime/gs/gs_threaded_backend.h"
 #include "runtime/gs/gs_gpu_backend.h"
 #include "runtime/gs/gs_pcsx2_backend.h"
+#include "urban/adx_output.h"
 #include "urban/anim_decoder.h"
 #include "urban/aspect.h"
 #include "urban/call_profile.h"
@@ -1439,6 +1440,7 @@ int main(int argc, char *argv[])
         installEightControllers(runtime);
         installExtraFighterMoves(runtime);
         urban::animdecoder::install(runtime);
+        urban::adxoutput::install(); // the right channel lost samples in the movies (PROGRESS §120)
         // FPS overlay (F3): 0x128dc0 runs once per iteration of the game's main loop (one game frame).
         urban::FunctionHooks::instance().observeEntry(0x128dc0u, "game_frame", [](uint8_t *, R5900Context *, PS2Runtime *runtime) {
             ps2_host_display::noteGameFrame();

@@ -2360,6 +2360,7 @@ lista de pendências.
         fps; pôr o IOP inline só durante o vídeo (mesmo com 10 s de folga) não resolve (3 de 5, 4 de 5) - testado e
         desfeito.
       - Próximo passo: achar no CRI_ADXI (ou no Sofdec do EE) o que avança o ponteiro do anel do canal direito.
+      - **Resolvido no §120** (o decodificador ADX do EE, não o IOP).
 
 95. **Controles pelo SDL3, mapeamento no formato do PCSX2 e vibração (2026-10-12).** No teste online do usuário pelo
     Parsec, o controle virtual do Parsec virou o jogador 1 (junto com o teclado) e o controle dele o 2: o jogador n
@@ -2755,6 +2756,33 @@ lista de pendências.
     - **Teste:** `PS2X_PAD_SCRIPT<n>` (novo) manda input para o controle n. Save de seleção com 4 humanos, CoopTool
       com 8, as duas portas: os 8 andam para baixo juntos, ninguém age como bot, 59-60 FPS. Golpes: P5/P6 Golem pegam
       a tabela do P2 (abraço de urso); P4 Brad forçado + P5 Lilian dão a 4ª vaga à Lilian. Release v1.3.0.
+
+120. **Vídeos iniciais: canal direito adiantado 171 ms e estalos (2026-10-29).** O caso em aberto do §94. Reproduzido
+     no Linux em ~1 de cada 3 boots: a partir de ~22 s, no vídeo de abertura, o direito toca o que o esquerdo toca 32
+     blocos depois e fica assim até o fim, com estalos no direito enquanto escorrega.
+    - **Não é o IOP.** O mixer do `CRI_ADXI` (0x571a4) pula um canal sem 0x200 bytes, mas os dois canais do vídeo
+      foram pulados o mesmo número de vezes numa execução que escorregou (`PS2X_IOP_TRACE_PC=57240`). A DMA do SIF
+      EE→IOP copia na hora.
+    - **Causa, no EE.** O PCM vai do decodificador ADX (ADXSJD) para um anel SJRBF de 0x4000 bytes por canal
+      (0x1406980 e 0x140aa40, objetos 0x69a478/0x69a4b8), e de lá a transferência do PSM (0x2fe2b8) manda pedaços ao
+      anel do IOP (0xf4a40/0xf8b40). O callback de saída do ADXSJD (`sub_002E1038`) pega um pedaço livre de cada
+      canal, mas calcula as amostras só com o tamanho do pedaço do canal 0; o callback de fim (`sub_002E14C0`)
+      corta cada canal nesse tamanho, e um canal com pedaço menor só guarda o que cabe. O resto foi escrito por cima
+      de dados que ainda iam para o IOP.
+    - O anel do IOP do canal direito dá a volta num ponto diferente do esquerdo (um pedaço de 0x4c0 logo no começo
+      do vídeo), a transferência do direito se divide em duas na volta e fica 0x400 atrás. No decode seguinte o
+      esquerdo tem 0x800 livres e o direito 0x400: o direito perde 0x400 bytes, uma vez por volta do anel (sempre
+      no mesmo ponto, 0x140e700). Em ~16 voltas são 0x4000 bytes = o anel inteiro = 171 ms, e aí estabiliza. No PS2
+      os dois canais andam juntos e o espaço livre é o mesmo. Medido com hooks temporários em `GetChunk`/`PutChunk`
+      do SJRBF (vtable 0x69a180): a primeira diferença é sempre a 522ª escrita do decodificador.
+    - **Correção** (`src/urban/adx_output.cpp`, `URBAN_ADX_MIN_FREE=0` desliga): na entrada de `sub_002F8C80`
+      chamada de dentro do callback (ra 0x2e10cc, os pedaços já pegos), o máximo de amostras do decode (`+0x38`)
+      passa a ser também o menor pedaço livre entre os canais / 2; o valor do jogo volta na entrada de
+      `sub_002E14C0`. Vale para todo ADX estéreo (música também); na luta o limite age em ~1,7% dos decodes.
+    - **Resultado:** com a correção 0 de 16 boots escorregaram (sem ela, 2 de 8 na mesma bateria e 7 de 24 antes).
+      Saltos entre blocos no canal direito no dump do ADMA: 52-255 nas execuções que escorregavam, 0 com a correção.
+      Abertura + título (120 s) sem underruns. fight8: 58,8 contra 58,7 quadros/s (ruído).
+    - Ferramentas (no scratchpad): correlação L/R por bloco do `PS2X_ADMA_DUMP` e contagem de saltos entre blocos.
 
 ## Ferramentas
 
