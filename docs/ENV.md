@@ -14,7 +14,7 @@
 | `PS2X_GS_SIGNAL_STALL=0` | (runtime) desliga o stall do SIGNAL no GS |
 | `URBAN_TRACE` | `BOOT,LOADER,FILE,EE,IOP,GS,VU,SPU2,INPUT,GAME,HOOK` ou `ALL` |
 | `URBAN_MISSING_FUNCTION=continue` | não para quando o jogo pula para um endereço sem função recompilada |
-| `URBAN_HANG_DUMP=<s>` | após `<s>` s: pilhas nativas, threads/semáforos do EE, DMA, timers, INTC, GS CSR/IMR e amostras do PC do jogo (`URBAN_HANG_DUMP_REPEAT=<s>`, `URBAN_HANG_DUMP_NATIVE=0`) |
+| `URBAN_HANG_DUMP=<s>` | após `<s>` s: pilhas nativas (só no Windows), threads/semáforos do EE, DMA, timers, INTC, GS CSR/IMR e amostras do PC do jogo (`URBAN_HANG_DUMP_REPEAT=<s>`, `URBAN_HANG_DUMP_NATIVE=0`) |
 | `URBAN_DUMP_MEM=addr:len,...` | junto do hang dump, hex dump da RAM do jogo |
 | `URBAN_TRACE=HOOK` | loga cada chamada HLE com argumentos e retorno |
 | `URBAN_HLE_SKIP=nome,...` | deixa essas funções do SDK como código recompilado |
@@ -69,6 +69,7 @@
 | `PS2X_DMAC_CLEAR_LATCH=0` | (runtime) não limpa a conclusão de DMA guardada (canal desligado) quando o jogo limpa o bit no `D_STAT` (§92: FMVs deslocados) |
 | `PS2X_ADMA_HOLD=0` | (runtime) com o bloco de ADMA atrasado, toca silêncio em vez de repetir a última amostra (§92: estalos nos vídeos) |
 | `PS2X_ADMA_COPY=ahead/all/0` | (runtime) quando os blocos de ADMA são lidos da RAM do IOP: `ahead` (padrão) um bloco à frente, como o hardware; `all` a transferência inteira no início; `0` na hora de tocar (§94) |
+| `PS2X_GIF_BUSY_UNTIL_GS=0` | (runtime) com o MTVU, o EE vê o `D2_CHCR.STR` real na hora em vez de ligado até o GS consumir os dados e a interrupção do SIGNAL ser entregue (§121: vídeo de abertura congelando) |
 | `URBAN_ADX_MIN_FREE=0` | desliga o limite do decodificador ADX da CRI ao canal com menos espaço livre (§120: canal direito adiantado e estalos nos vídeos) |
 | `PS2X_ADMA_DUMP=<arquivo>` | (runtime) grava cada bloco de ADMA tocado (cabeçalho de 4 bytes `A`, core, 0, 0 + 256 pares esquerdo/direito s16le) |
 | `PS2X_MULTITAP=0/1/2/12` | (runtime; `controls.ini` `[Pad] MultitapPort1/2`, padrão porta 2) multitap na porta 1, 2 ou nas duas: até 8 controles, na ordem 1A, 2A, 2B-2D, 1B-1D (a porta 2 antes da 1, a que o jogo usa para o P3/P4; o PCSX2 põe a porta 1 antes) |

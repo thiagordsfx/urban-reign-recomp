@@ -160,6 +160,12 @@ uint64_t g_ps2xEeDeferred = 0u;
 std::atomic<uint64_t> g_ps2xEeDeferBudget{0u};
 uint32_t g_ps2xEeLoopCycles = 32u;
 
+// True while a SIGNAL/FINISH the GS raised has not been through dispatchGsInterrupt yet (EE thread only).
+bool ps2xGsInterruptUndelivered() noexcept
+{
+    return gsInterruptUnseen();
+}
+
 // After a save state is loaded: the GS interrupts seen so far and a deferred deadline belong to the session before it.
 void ps2xSchedulerResetGsTransientState() noexcept
 {

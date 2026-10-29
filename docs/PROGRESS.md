@@ -2784,6 +2784,42 @@ lista de pendências.
       Abertura + título (120 s) sem underruns. fight8: 58,8 contra 58,7 quadros/s (ruído).
     - Ferramentas (no scratchpad): correlação L/R por bloco do `PS2X_ADMA_DUMP` e contagem de saltos entre blocos.
 
+121. **Vídeo de abertura congelando no Linux (2026-10-29).** Depois do §120 o usuário viu o vídeo inicial parar logo
+     depois do logo da CRI em 3 de 3 boots (pular o vídeo não trava). Não era o §120: trava igual com
+     `URBAN_ADX_MIN_FREE=0` e no binário da 1.4.0; com `PS2X_MTVU=0`, 4 de 4 passam.
+    - Medida: `PS2X_FRAME_TIMES` (0 bytes de GIF por quadro a partir de ~10-30 s) e o `URBAN_HANG_DUMP`, que agora
+      funciona no Linux (estado do EE, DMA e amostras do PC; as pilhas nativas continuam só no Windows). A thread
+      principal fica no laço `0x1298a0` esperando o "quadro terminado".
+    - Cada pedaço do quadro termina com um SIGNAL no caminho do VIF1 (id 2) e outro no do GIF (id 1). Quando os dois
+      chegam (SIGLBLID = 3), o handler do GS (`0x10bc38`) acha o próximo pedaço de cada cadeia pelo **`D2_TADR`** /
+      `D1_TADR` (tag em TADR + (QWC + 1) × 16) e dispara os dois (`0x10a790`, `0x10a5a0`).
+    - Com `PS2X_MTVU_TRACE` (e um registro temporário de cada início de DMA): os jobs do VU começaram 4 ms depois do
+      kick (wake da thread no Linux). Para o EE o DMA do GIF já tinha acabado na hora, então o player do vídeo mandou a
+      imagem dele (cadeia em 0xd3bf80/0xd56480, que normalmente sai depois do fim do quadro) no meio do quadro. O
+      handler leu o TADR dessa cadeia, disparou o lugar errado, o SIGNAL id 1 do quadro nunca veio.
+    - No PS2 o `D2_CHCR.STR` fica ligado até o GS consumir os dados, e a interrupção do SIGNAL vem antes de o canal
+      ficar livre. **Correção** (`ps2_memory.cpp`, `PS2X_GIF_BUSY_UNTIL_GS=0` desliga): com o MTVU, o EE lê
+      `D2_CHCR.STR = 1` enquanto os workers têm trabalho, há dados do GIF parados num SIGNAL ou na fila de SIGNAL, ou
+      uma interrupção do GS ainda não passou pelo `dispatchGsInterrupt` (`ps2xGsInterruptUndelivered`). Se durar
+      100 ms, o EE volta a ver o valor real até os workers ficarem livres uma vez (rede de segurança, com log).
+    - Resultado: 6 de 6 boots sem congelar (antes ~5 de 6); o usuário confirmou. fight8_heli: 59,5 contra 58,7
+      quadros/s sem a correção (ruído).
+    - Visto na mesma sessão e **não reproduzido**: depois de ~8 min jogando, música e falas sumiram (efeitos
+      continuaram) e o vídeo de abertura ficou preto e mudo. No quick save: o contador de cargas de banco de som
+      `0xa5e5c8` ficou em 1, e o jogo só religa a saída do ADX (`0x696948`, pelos wrappers `0x2e0578`/`0x2e0590`)
+      quando ele volta a 0. O carregador (`0x2888c0`, estado em `*obj+0x50`: 2 inicia, 3 espera, 4 pronto,
+      5 erro) não decrementa no erro (5). Os SJ do PSM estavam inteiros (não é o §34).
+
+122. **Listras suaves na janela maximizada: pontilhado (2026-10-29).** O usuário viu listras finas (verticais,
+     ~16 px) em janela de alguns tamanhos (maximizada, 2560×1050), nunca em tela cheia nem em janela pequena.
+    - Causa: o jogo desenha em 16 bits e o pontilhado 4×4 do PS2, com `Dithering=2` (sem escala), fica do tamanho
+      de um pixel da resolução interna (6× = 3840 px). O filtro bilinear da tela reduz isso sem aliasing só em
+      proporções inteiras (tela cheia 2,0; janela pequena 6,0); na maximizada (~2,12) o padrão vira listras.
+    - Comparado no save do usuário: 0 (desligado) tira as listras mas deixa faixas de cor; 1 (escalado) mostra um
+      xadrez; **3 (forçar 32 bits) fica liso**. Virou o padrão (`config.ini`, launcher).
+    - fight8_heli em 6×: 59,0-59,7 quadros/s contra 57,8-58,9 com o 2; intervalos entre presents p99 18,0 ms contra
+      20,0 ms; 60 imagens distintas/s nos dois.
+
 ## Ferramentas
 
 Ver a tabela de variáveis de ambiente no README. As mais úteis até agora:

@@ -484,6 +484,8 @@ comparada com o AOT vértice a vértice (como o `rn_compare.py`/`rn_vpfuzz.c` do
   - se o pontilhado vem da conversão de cor (CLUT/16 bits) e não do DTHE;
   - opção de desligar (`PS2X_GS_DITHER=0`), como o "Dithering: Off" do PCSX2;
   - comparar screenshots da mesma cena nos dois em 1×.
+  - 2026-10-29 (§122): o pontilhado "sem escala" em 6× fazia listras na janela maximizada; o padrão agora é
+    "forçar 32 bits", sem pontilhado.
 - **Modo história:** às vezes trava com `[mtvu] vblank waited 100 ms for the VU/GIF workers; going ahead`.(nao aconteceu mais, joquei até a missao 32 e nao travou, so as travadinhas mesmo que)
 - **Gráficos:** texturas faltando ou com aspecto posterizado em lutas; faltam as estrelinhas de stun na cabeça e falta as bolinhas do HUD no multiplayer de quem enceu o ROUND.
   faltam cores no seletor "1p vs 2p..." do menu.
@@ -496,6 +498,10 @@ comparada com o AOT vértice a vértice (como o `rn_compare.py`/`rn_vpfuzz.c` do
     iniciais: **resolvido** (§120: o decodificador ADX da CRI media só o espaço livre do canal esquerdo e o direito
     perdia 0x400 bytes a cada volta do anel). Falta o usuário confirmar de ouvido. Continua anotado o resto de chiado
     à direita em algumas músicas de luta e na seleção (§94).
+  - **Vídeo de abertura congelando** (Linux, MTVU): **resolvido** (§121: o player do vídeo enviava a imagem pelo GIF
+    no meio do quadro e o handler do GS seguia a cadeia errada).
+  - **Música e falas sumindo depois de ~8 min** (efeitos continuam; o vídeo de abertura fica preto e mudo): visto
+    uma vez, não reproduzido. Contador de cargas de banco `0xa5e5c8` preso em 1 (§121).
 - **Save no memory card:** ~~pequenos cortes de áudio e travadinhas durante a gravação~~ resolvido segundo o usuário
   (2026-10-11, acima).
 - **Pico raro de 68-79 ms:** sem causa encontrada. (no modo hsitoria esta acontecendo frequente umas travadas entao da pra testar com eu jogando ) → em 2026-10-11 o usuário viu os mesmos engasgos no PCSX2 (acima).
