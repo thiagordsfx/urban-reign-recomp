@@ -432,8 +432,9 @@ Gamma=50
 TVShader=0
 # Screen filter (the image scaled to the window): 0 = none (sharp pixels), 1 = smooth (default), 2 = sharp.
 ScreenFilter=1
-# Dithering: 0 = off, 1 = scaled, 2 = unscaled (default), 3 = force 32 bit.
-Dithering=2
+# Dithering: 0 = off, 1 = scaled, 2 = unscaled, 3 = force 32 bit (default; 2 made faint stripes in a window that
+# scales the image by a fraction).
+Dithering=3
 # Blending accuracy: 0 = minimum ... 1 = basic (default) ... 5 = maximum (heavier).
 BlendingAccuracy=1
 # Stretch the image to the window: 1 = yes, 0 = keep the aspect ratio below with black bars.
