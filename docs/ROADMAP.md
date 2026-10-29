@@ -492,9 +492,10 @@ comparada com o AOT vértice a vértice (como o `rn_compare.py`/`rn_vpfuzz.c` do
     `0x10e260`...): o efeito de hit (fogo) já aparece; conferir estrelinhas de stun e as cores do seletor "1P VS 1C".
   - **Vídeos de abertura** com a imagem deslocada e faixa preta, e estalos no áudio: **resolvidos** (§92: conclusão de
     DMA guardada que o `D_STAT` não limpava; ADMA devolvendo 0 com o bloco atrasado).
-  - **Áudio do vídeo: canal direito adiantado 171 ms** (fala na direita e depois na esquerda) em parte das execuções,
-    a partir de um momento pesado do vídeo; e um resto de chiado à direita em algumas músicas de luta e na seleção.
-    Investigação no PROGRESS §94 (gatilho: catch-up dos vblanks + IOP em thread própria).
+  - **Áudio do vídeo: canal direito adiantado 171 ms** (fala na direita e depois na esquerda) e estalos nos vídeos
+    iniciais: **resolvido** (§120: o decodificador ADX da CRI media só o espaço livre do canal esquerdo e o direito
+    perdia 0x400 bytes a cada volta do anel). Falta o usuário confirmar de ouvido. Continua anotado o resto de chiado
+    à direita em algumas músicas de luta e na seleção (§94).
 - **Save no memory card:** ~~pequenos cortes de áudio e travadinhas durante a gravação~~ resolvido segundo o usuário
   (2026-10-11, acima).
 - **Pico raro de 68-79 ms:** sem causa encontrada. (no modo hsitoria esta acontecendo frequente umas travadas entao da pra testar com eu jogando ) → em 2026-10-11 o usuário viu os mesmos engasgos no PCSX2 (acima).
